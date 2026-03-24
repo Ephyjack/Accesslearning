@@ -159,8 +159,7 @@ export function ClassroomInterface() {
 
   return (
     <div className="h-screen flex flex-col" style={{ background: "#0f172a" }}>
-      {/* TOP NAV */}
-      <header
+            <header
         className="h-14 flex items-center justify-between px-5 shrink-0"
         style={{
           background: "#0f172a",

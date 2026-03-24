@@ -3,35 +3,14 @@ import { useNavigate } from "react-router";
 import {
   GraduationCap,
   Plus,
-  Copy,
-  Users,
   BarChart2,
-  BookOpen,
   Clock,
-  Video,
-  MoreVertical,
-  Bell,
-  Search,
-  TrendingUp,
   CheckCircle2,
   FileText,
   Layers,
   LogOut,
   Settings,
   ChevronRight,
-  Globe,
-  Mic,
-  Radio,
-  ShieldCheck,
-  UserCheck,
-  UserX,
-  Hash,
-  Lock,
-} from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
@@ -46,92 +25,6 @@ const engagementData = [
   { day: "Sat", students: 14 },
   { day: "Sun", students: 10 },
 ];
-
-const classes = [
-  {
-    id: "cls-001",
-    name: "Advanced Biology",
-    code: "BIO-4821",
-    students: 32,
-    nextSession: "Today, 3:00 PM",
-    language: "EN → 5 langs",
-    color: "#1e3a8a",
-    status: "active",
-    assignments: 4,
-  },
-  {
-    id: "cls-002",
-    name: "World History",
-    code: "HIS-2233",
-    students: 28,
-    nextSession: "Tomorrow, 10:00 AM",
-    language: "EN → 8 langs",
-    color: "#7c3aed",
-    status: "active",
-    assignments: 2,
-  },
-  {
-    id: "cls-003",
-    name: "Intro to Python",
-    code: "PY-9910",
-    students: 45,
-    nextSession: "Wed, 2:00 PM",
-    language: "EN → 12 langs",
-    color: "#059669",
-    status: "idle",
-    assignments: 6,
-  },
-  {
-    id: "cls-004",
-    name: "Art & Culture",
-    code: "ART-7741",
-    students: 19,
-    nextSession: "Thu, 11:00 AM",
-    language: "EN → 3 langs",
-    color: "#d97706",
-    status: "idle",
-    assignments: 1,
-  },
-];
-
-const recentAssignments = [
-  { title: "Cell Division Lab Report", class: "Advanced Biology", due: "Mar 15", submissions: 18, total: 32 },
-  { title: "WW2 Essay", class: "World History", due: "Mar 16", submissions: 24, total: 28 },
-  { title: "Python Functions Quiz", class: "Intro to Python", due: "Mar 18", submissions: 10, total: 45 },
-];
-
-const ROOMS = [
-  { id: "r1", name: "SS1 Physics Room", participants: 12, live: true, sessions: 24, pendingCount: 3 },
-  { id: "r2", name: "SS2 Chemistry Lab", participants: 0, live: false, sessions: 18, pendingCount: 0 },
-  { id: "r3", name: "Math Extra Class", participants: 5, live: true, sessions: 31, pendingCount: 1 },
-  { id: "r4", name: "Biology Session", participants: 0, live: false, sessions: 12, pendingCount: 0 },
-];
-
-const INIT_REQUESTS = [
-  { id: "jq1", name: "Amina Osei", avatar: "AO", room: "SS1 Physics Room", time: "Just now", status: "pending" },
-  { id: "jq2", name: "Carlos Vega", avatar: "CV", room: "SS1 Physics Room", time: "2 min ago", status: "pending" },
-  { id: "jq3", name: "Nadia Petrov", avatar: "NP", room: "Math Extra Class", time: "5 min ago", status: "pending" },
-  { id: "jq4", name: "Liu Wei", avatar: "LW", room: "SS1 Physics Room", time: "10 min ago", status: "approved" },
-  { id: "jq5", name: "Erik Müller", avatar: "EM", room: "Biology Session", time: "12 min ago", status: "blocked" },
-];
-
-export function TeacherDashboard() {
-  const navigate = useNavigate();
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
-  const [showAccessModal, setShowAccessModal] = useState(false);
-  const [newClassName, setNewClassName] = useState("");
-  const [newRoomName, setNewRoomName] = useState("");
-  const [requests, setRequests] = useState(INIT_REQUESTS);
-  const [activeTab, setActiveTab] = useState<"classes" | "rooms">("classes");
-
-  const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
   const handleRequest = (id: string, action: "approved" | "blocked") => {
     setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: action } : r)));
   };
@@ -205,7 +98,6 @@ export function TeacherDashboard() {
             </button>
           ))}
         </nav>
-
         {/* Bottom */}
         <div className="p-4 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-3 mb-4">
