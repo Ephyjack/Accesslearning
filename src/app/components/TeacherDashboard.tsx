@@ -122,11 +122,14 @@ export function TeacherDashboard() {
       alert("Failed to create room: " + error.message);
       return;
     }
-    if (data) setRooms(prev => [data, ...prev]);
-    setNewRoomName("");
-    setNewRoomLang("English");
-    setNewRoomPrivate(false);
-    setShowCreateRoomModal(false);
+    if (data) {
+      setRooms(prev => [data, ...prev]);
+      setNewRoomName("");
+      setNewRoomLang("English");
+      setNewRoomPrivate(false);
+      setShowCreateRoomModal(false);
+      navigate(`/classroom/${data.id}`);
+    }
   };
 
   const handleDeleteRoom = async (id: string) => {

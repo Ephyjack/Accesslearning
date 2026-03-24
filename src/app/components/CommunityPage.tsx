@@ -357,10 +357,22 @@ export function CommunityPage() {
   };
 
   const deleteCommunity = async () => {
-    if (window.confirm("Are you sure you want to permanently delete this community? This cannot be undone.")) {
-      await supabase.from("communities").delete().eq("id", activeCommunity);
-      // State is handled by realtime subscription
+    if (!window.confirm("Are you sure you want to permanently delete this community? This cannot be undone.")) return;
+    const toDelete = activeCommunity;
+    const { error } = await supabase.from("communities").delete().eq("id", toDelete);
+    if (error) {
+      alert("Failed to delete community: " + error.message);
+      return;
     }
+    // Immediately update local state (don't rely solely on realtime)
+    setCommunities(prev => {
+      const newList = prev.filter(c => c.id !== toDelete);
+      setActiveCommunity(newList[0]?.id || "");
+      return newList;
+    });
+    setChannels({ text: [], rooms: [] });
+    setMessages([]);
+    setMembers([]);
   };
 
   const handleCreateRoom = async () => {
@@ -375,25 +387,19 @@ export function CommunityPage() {
       is_private: newRoomPrivate,
       status: "offline",
     }).select().single();
-    if (!error && data) {
+    if (error) {
+      alert("Failed to create room: " + error.message);
+      return;
+    }
+    if (data) {
       const newRoom: Room = { id: data.id, name: data.name, teacher: data.teacher_id, participants: 0, live: false };
       setChannels(prev => ({ ...prev, rooms: [...prev.rooms, newRoom] }));
-    } else if (error) {
-      // Fallback: also insert into classes table for community rooms
-      await supabase.from("classes").insert({
-        name: newRoomName,
-        code,
-        language: newRoomLang,
-        teacher_id: sessionUser.id,
-        community_id: activeCommunity,
-        status: "active",
-        students_count: 0,
-      });
+      setNewRoomName("");
+      setNewRoomLang("English");
+      setNewRoomPrivate(false);
+      setShowCreateRoomModal(false);
+      navigate(`/classroom/${data.id}`);
     }
-    setNewRoomName("");
-    setNewRoomLang("English");
-    setNewRoomPrivate(false);
-    setShowCreateRoomModal(false);
   };
 
   const approveRequest = (idx: number) => {
