@@ -47,7 +47,7 @@ export function TeacherDashboard() {
   // -----------------------
   // Tabs & Modals
   // -----------------------
-  const [activeTab, setActiveTab] = useState<"classes" | "rooms">("classes");
+  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities">("classes");
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
@@ -64,10 +64,10 @@ export function TeacherDashboard() {
 
   const handleCreateClass = async () => {
     if (!newClassName.trim() || !profile) return;
-    
+
     // Generate a random 6-character code for the class
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    
+
     const { data, error } = await supabase
       .from("classes")
       .insert({
@@ -86,7 +86,7 @@ export function TeacherDashboard() {
       alert("Failed to create class: " + error.message);
       return;
     }
-    
+
     setShowCreateModal(false);
     navigate(`/classroom/${code}`);
   };
@@ -95,9 +95,9 @@ export function TeacherDashboard() {
     if (!window.confirm("Are you sure you want to permanently delete this class?")) return;
     const { error } = await supabase.from("classes").delete().eq("id", id);
     if (!error) {
-       setClasses(prev => prev.filter(c => c.id !== id));
+      setClasses(prev => prev.filter(c => c.id !== id));
     } else {
-       alert("Failed to delete class.");
+      alert("Failed to delete class.");
     }
   };
 
@@ -123,12 +123,12 @@ export function TeacherDashboard() {
     const fetchCommunities = async () => {
       if (!profile) return;
       const { data, error } = await supabase
-        .from("communities")
-        .select("*")
-        .eq("teacher_id", profile.id);
+        .from("community_members")
+        .select("community_id, communities(*)")
+        .eq("user_id", profile.id);
 
       if (error) console.error(error);
-      else setCommunities(data || []);
+      else setCommunities(data?.map((m: any) => m.communities).filter(Boolean) || []);
     };
     fetchCommunities();
   }, [profile]);
@@ -279,13 +279,13 @@ export function TeacherDashboard() {
         // Fetch pending requests for these classes
         const classIds = clsData.map(c => c.id);
         if (classIds.length > 0) {
-           const { data: reqs } = await supabase
-             .from("room_requests")
-             .select("id")
-             .in("class_id", classIds)
-             .eq("status", "pending");
-           
-           setPendingCount(reqs ? reqs.length : 0);
+          const { data: reqs } = await supabase
+            .from("room_requests")
+            .select("id")
+            .in("class_id", classIds)
+            .eq("status", "pending");
+
+          setPendingCount(reqs ? reqs.length : 0);
         }
       }
     };
@@ -606,7 +606,7 @@ export function TeacherDashboard() {
             className="flex p-1 rounded-xl"
             style={{ background: "#f1f5f9" }}
           >
-            {(["classes", "rooms"] as const).map((t) => (
+            {(["classes", "rooms", "communities"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
@@ -619,7 +619,7 @@ export function TeacherDashboard() {
                     activeTab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
                 }}
               >
-                {t === "classes" ? "Classrooms" : "Persistent Rooms"}
+                {t === "classes" ? "Classrooms" : t === "rooms" ? "Persistent Rooms" : "Communities"}
               </button>
             ))}
           </div>
@@ -640,7 +640,7 @@ export function TeacherDashboard() {
 
         {/* Main grid left column */}
         <div className="lg:col-span-2 space-y-4">
-          {activeTab === "classes" ? (
+          {activeTab === "classes" && (
             <>
               <div className="flex items-center justify-between mb-1">
                 <h2
@@ -770,7 +770,9 @@ export function TeacherDashboard() {
                 </div>
               ))}
             </>
-          ) : (
+          )}
+
+          {activeTab === "rooms" && (
             <>
               {/* Dynamic Rooms */}
               {rooms.length === 0 && (
@@ -880,7 +882,63 @@ export function TeacherDashboard() {
               ))}
             </>
           )}
+
+          {activeTab === "communities" && (
+            <>
+              {communities.length === 0 && (
+                <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(139,92,246,0.08)", color: "#8b5cf6" }}>
+                    <Radio className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">No communities yet</h3>
+                  <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't joined any communities. Explore public communities or create your own.</p>
+                  <button onClick={() => navigate("/community")} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#8b5cf6" }}>
+                    Explore Communities
+                  </button>
+                </div>
+              )}
+              {communities.map((comm) => (
+                <div
+                  key={comm.id}
+                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                  style={{ border: "1px solid #f1f5f9" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-white font-bold"
+                        style={{ background: comm.color || "#1e3a8a" }}
+                      >
+                        {comm.avatar || comm.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                            {comm.name}
+                          </span>
+                          <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ background: "#f1f5f9", color: "#64748b" }}>
+                            {comm.type}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Community Group
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => navigate(`/community/${comm.id}`)}
+                      className="text-xs px-4 py-2 rounded-lg text-white font-semibold transition-all hover:opacity-90 flex items-center gap-1.5"
+                      style={{ background: comm.color || "#1e3a8a" }}
+                    >
+                      <Radio className="w-3.5 h-3.5" /> Enter Community
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
+
 
         {/* Right column */}
         <div className="space-y-5">
@@ -975,11 +1033,10 @@ export function TeacherDashboard() {
                       <div
                         className="h-full rounded-full"
                         style={{
-                          width: `${
-                            a.total_students > 0
+                          width: `${a.total_students > 0
                               ? (a.submissions_count / a.total_students) * 100
                               : 0
-                          }%`,
+                            }%`,
                           background:
                             "linear-gradient(90deg, #1e3a8a, #7c3aed)",
                         }}
@@ -992,57 +1049,57 @@ export function TeacherDashboard() {
               <p className="text-xs text-gray-400">No recent assignments.</p>
             )}
           </div>
-          
-                {/* ── Modals ── */}
 
-      {/* Create Classroom Modal */}
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
-          onClick={() => setShowCreateModal(false)}
-        >
-          <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create New Classroom</h2>
-            <p className="text-sm text-gray-400 mb-6">Students will join using the auto-generated class code.</p>
-            <div className="mb-4">
-              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Class Name</label>
-              <input
-                value={newClassName}
-                onChange={(e) => setNewClassName(e.target.value)}
-                placeholder="e.g. Introduction to Chemistry"
-                className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
-                style={{ borderColor: "#e2e8f0" }}
-              />
+          {/* ── Modals ── */}
+
+          {/* Create Classroom Modal */}
+          {showCreateModal && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center"
+              style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+              onClick={() => setShowCreateModal(false)}
+            >
+              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+                <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create New Classroom</h2>
+                <p className="text-sm text-gray-400 mb-6">Students will join using the auto-generated class code.</p>
+                <div className="mb-4">
+                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Class Name</label>
+                  <input
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    placeholder="e.g. Introduction to Chemistry"
+                    className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
+                    style={{ borderColor: "#e2e8f0" }}
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Primary Language</label>
+                  <select value={newClassLang} onChange={(e) => setNewClassLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                    <option>English</option>
+                    <option>Spanish</option>
+                    <option>French</option>
+                    <option>Mandarin</option>
+                  </select>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 py-3 rounded-xl border text-sm"
+                    style={{ borderColor: "#e2e8f0", color: "#64748b" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateClass}
+                    className="flex-1 py-3 rounded-xl text-white text-sm"
+                    style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+                  >
+                    Create & Open
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="mb-6">
-              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Primary Language</label>
-              <select value={newClassLang} onChange={(e) => setNewClassLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
-                <option>English</option>
-                <option>Spanish</option>
-                <option>French</option>
-                <option>Mandarin</option>
-              </select>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1 py-3 rounded-xl border text-sm"
-                style={{ borderColor: "#e2e8f0", color: "#64748b" }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateClass}
-                className="flex-1 py-3 rounded-xl text-white text-sm"
-                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
-              >
-                Create & Open
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
 
 
           {/* Communities */}

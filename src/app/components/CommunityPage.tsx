@@ -28,6 +28,7 @@ import {
   Globe,
   UserPlus,
   Radio,
+  Trash2,
 } from "lucide-react";
 
 type Role = "teacher" | "student" | "admin";
@@ -39,6 +40,7 @@ export interface Community {
   color: string;
   type: "school" | "public" | "private";
   unread: number;
+  created_by?: string;
 }
 
 export interface Channel {
@@ -107,6 +109,11 @@ export function CommunityPage() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showExploreModal, setShowExploreModal] = useState(false);
+  const [exploreSearch, setExploreSearch] = useState("");
+  const [exploreResults, setExploreResults] = useState<Community[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   const [showJoinRoomModal, setShowJoinRoomModal] = useState<Room | null>(null);
   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
   const [pendingRooms, setPendingRooms] = useState<string[]>([]);
@@ -124,23 +131,51 @@ export function CommunityPage() {
         setSessionUser(user);
         const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
         if (profile) setViewerRole(profile.role as Role);
-      }
 
-      const { data: genericComms } = await supabase.from("communities").select("*");
-      if (genericComms) {
-        const loadedComms = genericComms.map(c => ({
-          id: c.id,
-          name: c.name,
-          avatar: c.avatar || c.name.substring(0, 2).toUpperCase(),
-          color: c.color || "#1e3a8a",
-          type: c.type || "public",
-          unread: 0
-        }));
-        setCommunities(loadedComms);
-        if (loadedComms.length > 0 && !(id || activeCommunity)) setActiveCommunity(loadedComms[0].id);
+        const { data: myComms } = await supabase.from("community_members")
+          .select("community_id, communities(*)")
+          .eq("user_id", user.id);
+
+        if (myComms && myComms.length > 0) {
+          const loadedComms = myComms.map((m: any) => ({
+            id: m.communities.id,
+            name: m.communities.name,
+            avatar: m.communities.avatar || m.communities.name.substring(0, 2).toUpperCase(),
+            color: m.communities.color || "#1e3a8a",
+            type: m.communities.type || "public",
+            unread: 0,
+            created_by: m.communities.created_by
+          }));
+          setCommunities(loadedComms);
+          if (!(id || activeCommunity)) setActiveCommunity(loadedComms[0].id);
+        } else {
+          setCommunities([]);
+        }
+      } else {
+        const { data: genericComms } = await supabase.from("communities").select("*");
+        if (genericComms) {
+          const loadedComms = genericComms.map(c => ({
+            id: c.id, name: c.name, avatar: c.avatar || c.name.substring(0, 2).toUpperCase(),
+            color: c.color || "#1e3a8a", type: c.type || "public", unread: 0, created_by: c.created_by
+          }));
+          setCommunities(loadedComms);
+          if (loadedComms.length > 0 && !(id || activeCommunity)) setActiveCommunity(loadedComms[0].id);
+        }
       }
     };
     fetchInitialData();
+
+    // Realtime deletion subscription
+    const sub = supabase.channel("communities_delete")
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "communities" }, (payload) => {
+        setCommunities(prev => {
+          const newList = prev.filter(c => c.id !== payload.old.id);
+          setActiveCommunity(current => current === payload.old.id ? (newList[0]?.id || "") : current);
+          return newList;
+        });
+      }).subscribe();
+
+    return () => { supabase.removeChannel(sub); };
   }, [id]);
 
   useEffect(() => {
@@ -208,8 +243,8 @@ export function CommunityPage() {
     return () => { supabase.removeChannel(channel); };
   }, [activeChannel]);
 
-  const community = communities.find((c) => c.id === activeCommunity) || communities[0] || { name: "Loading...", type: "public", color: "#666", avatar: ".." };
-  const channel = channels.text.find((c) => c.id === activeChannel) || channels.text[0] || { name: "loading..." };
+  const community = communities.find((c) => c.id === activeCommunity) || communities[0] || { id: "0", name: "", type: "public", color: "transparent", avatar: "" };
+  const channel = channels.text.find((c) => c.id === activeChannel) || channels.text[0] || { name: "" };
 
   const sendMessage = async () => {
     if (!chatInput.trim() || !activeChannel) return;
@@ -262,12 +297,53 @@ export function CommunityPage() {
       await supabase.from("community_members").insert({
         community_id: joinCode,
         user_id: sessionUser.id,
-        role: "student"
+        role: viewerRole
       });
       setActiveCommunity(joinCode);
     }
     setShowJoinModal(false);
     setJoinCode("");
+  };
+
+  const searchCommunities = async () => {
+    setIsSearching(true);
+    let query = supabase.from("communities").select("*").in("type", ["public", "school"]);
+    if (exploreSearch.trim()) query = query.ilike("name", `%${exploreSearch.trim()}%`);
+
+    const { data, error } = await query;
+    if (data && !error) {
+      setExploreResults(data.map(c => ({
+        id: c.id, name: c.name, avatar: c.avatar || c.name.substring(0, 2).toUpperCase(),
+        color: c.color || "#1e3a8a", type: c.type as any, unread: 0, created_by: c.created_by
+      })));
+    } else {
+      setExploreResults([]);
+    }
+    setIsSearching(false);
+  };
+
+  const joinPublicCommunity = async (comm: Community) => {
+    if (!sessionUser) return;
+    await supabase.from("community_members").insert({
+      community_id: comm.id,
+      user_id: sessionUser.id,
+      role: viewerRole
+    });
+    setCommunities(prev => {
+      const exists = prev.find(c => c.id === comm.id);
+      if (exists) return prev;
+      return [...prev, comm];
+    });
+    setActiveCommunity(comm.id);
+    setShowExploreModal(false);
+    setExploreSearch("");
+  };
+
+  const deleteCommunity = async () => {
+    if (window.confirm("Are you sure you want to permanently delete this community?")) {
+      await supabase.from("communities").delete().eq("id", activeCommunity);
+      // State is handled by realtime subscription
+    }
   };
 
   const approveRequest = (idx: number) => {
@@ -353,6 +429,16 @@ export function CommunityPage() {
           <Plus className="w-5 h-5" />
         </button>
 
+        {/* Explore Communities Search */}
+        <button
+          onClick={() => { setShowExploreModal(true); searchCommunities(); }}
+          className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all hover:bg-purple-500/20"
+          style={{ background: "rgba(255,255,255,0.06)", color: "#c084fc" }}
+          title="Explore Communities"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
         {/* Join with code */}
         <button
           onClick={() => setShowJoinModal(true)}
@@ -391,21 +477,36 @@ export function CommunityPage() {
       >
         {/* Community header */}
         <div
-          className="px-4 py-4 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+          className="px-4 py-4 flex items-center justify-between group transition-colors relative"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
-              style={{ background: community.color, fontWeight: 700 }}
-            >
-              {community.avatar}
-            </div>
-            <span className="text-white text-sm truncate" style={{ fontWeight: 700 }}>
-              {community.name}
-            </span>
+            {community.name ? (
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
+                style={{ background: community.color, fontWeight: 700 }}
+              >
+                {community.avatar}
+              </div>
+            ) : (
+              <div className="w-7 h-7 rounded-lg bg-gray-700 animate-pulse shrink-0"></div>
+            )}
+            {community.name ? (
+              <span className="text-white text-sm truncate" style={{ fontWeight: 700 }}>
+                {community.name}
+              </span>
+            ) : (
+              <div className="h-4 w-24 bg-gray-700 animate-pulse rounded"></div>
+            )}
           </div>
-          <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+          <div className="flex items-center gap-1">
+            {community.created_by === sessionUser?.id && community.id !== "0" && (
+              <button onClick={deleteCommunity} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+            <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+          </div>
         </div>
 
         {/* Community type badge */}
@@ -573,11 +674,19 @@ export function CommunityPage() {
         >
           <div className="flex items-center gap-2">
             <Hash className="w-4 h-4 text-gray-400" />
-            <span className="text-white text-sm" style={{ fontWeight: 700 }}>
-              {channel.name}
-            </span>
+            {channel.name ? (
+              <span className="text-white text-sm" style={{ fontWeight: 700 }}>
+                {channel.name}
+              </span>
+            ) : (
+              <div className="h-4 w-20 bg-gray-700 animate-pulse rounded"></div>
+            )}
             <span className="text-gray-600 text-xs mx-1">·</span>
-            <span className="text-gray-400 text-xs">General discussion for {community.name}</span>
+            {community.name ? (
+              <span className="text-gray-400 text-xs">General discussion for {community.name}</span>
+            ) : (
+              <div className="h-3 w-40 bg-gray-700 animate-pulse rounded mt-1"></div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {viewerRole === "teacher" && joinRequests.length > 0 && (
@@ -829,6 +938,75 @@ export function CommunityPage() {
       {/* Rooms quick card — shown as floating overlay when no requests panel */}
 
       {/* ── Modals ── */}
+
+      {/* Explore Communities */}
+      {showExploreModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowExploreModal(false)}
+        >
+          <div
+            className="rounded-2xl p-7 shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+            style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-white mb-1" style={{ fontWeight: 800 }}>Explore Communities</h2>
+            <p className="text-sm text-gray-400 mb-5">Find public and school groups to join.</p>
+            <div className="flex gap-2 mb-4 shrink-0">
+              <input
+                value={exploreSearch}
+                onChange={(e) => setExploreSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && searchCommunities()}
+                placeholder="Search communities..."
+                className="flex-1 px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ background: "rgba(255,255,255,0.07)", color: "white", border: "1px solid rgba(255,255,255,0.1)" }}
+              />
+              <button
+                onClick={searchCommunities}
+                className="px-4 py-3 rounded-xl text-white transition-all hover:bg-blue-600"
+                style={{ background: "#2563eb" }}
+              >
+                <Search className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 min-h-0" style={{ scrollbarWidth: "thin" }}>
+              {isSearching ? (
+                <div className="py-8 text-center text-sm text-gray-400">Searching...</div>
+              ) : exploreResults.length === 0 ? (
+                <div className="py-8 text-center text-sm text-gray-400">No communities found.</div>
+              ) : (
+                exploreResults.map(c => (
+                  <div key={c.id} className="flex items-center justify-between p-3 rounded-xl" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0" style={{ background: c.color, fontWeight: 700 }}>
+                        {c.avatar}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-white text-sm truncate" style={{ fontWeight: 600 }}>{c.name}</div>
+                        <div className="text-xs capitalize text-gray-400">{c.type} Community</div>
+                      </div>
+                    </div>
+                    {communities.find(cc => cc.id === c.id) ? (
+                      <button disabled className="px-3 py-1.5 rounded-lg text-xs" style={{ background: "rgba(255,255,255,0.1)", color: "#9ca3af" }}>Joined</button>
+                    ) : (
+                      <button onClick={() => joinPublicCommunity(c)} className="px-3 py-1.5 rounded-lg text-xs text-white transition-all hover:opacity-90 shrink-0" style={{ background: "#10b981" }}>Join</button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            <button
+              onClick={() => setShowExploreModal(false)}
+              className="mt-5 w-full py-2.5 rounded-xl text-sm transition-all"
+              style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Create Community */}
       {showCreateModal && (

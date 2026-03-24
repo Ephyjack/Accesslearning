@@ -11,7 +11,7 @@ export function StudentDashboard() {
   const navigate = useNavigate();
   const [joinCode, setJoinCode] = useState("");
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "assignments" | "recordings">("classes");
+  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "assignments" | "recordings" | "communities">("classes");
   const [preferredLang, setPreferredLang] = useState("English");
 
   // User details
@@ -23,6 +23,7 @@ export function StudentDashboard() {
   const [ROOMS, setRooms] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [recordings, setRecordings] = useState<any[]>([]);
+  const [communities, setCommunities] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<Record<string, string>>({});
   const [showRequestModal, setShowRequestModal] = useState<any>(null);
 
@@ -38,27 +39,36 @@ export function StudentDashboard() {
         .select("*")
         .eq("id", user.id)
         .single();
-      
+
       setProfile(userProfile);
       setLoading(false);
 
       const { data: approvedReqs, error: reqErr } = await supabase
-         .from('room_requests')
-         .select('status, classes(*)')
-         .eq('student_id', userProfile.id);
-      
+        .from('room_requests')
+        .select('status, classes(*)')
+        .eq('student_id', userProfile.id);
+
       if (!reqErr && approvedReqs) {
-         const activeEnrolled = approvedReqs
-            .filter(r => r.status === 'approved' && r.classes)
-            .map(r => r.classes);
-         setEnrolledClasses(activeEnrolled);
-         
-         // Set room statuses for the request modal UI
-         const statuses: Record<string, string> = {};
-         approvedReqs.forEach(r => {
-            if (r.classes) statuses[(r.classes as any).id] = r.status;
-         });
-         setRoomStatuses(statuses);
+        const activeEnrolled = approvedReqs
+          .filter(r => r.status === 'approved' && r.classes)
+          .map(r => r.classes);
+        setEnrolledClasses(activeEnrolled);
+
+        // Set room statuses for the request modal UI
+        const statuses: Record<string, string> = {};
+        approvedReqs.forEach(r => {
+          if (r.classes) statuses[(r.classes as any).id] = r.status;
+        });
+        setRoomStatuses(statuses);
+      }
+
+      // Fetch communities
+      const { data: myComms } = await supabase
+        .from("community_members")
+        .select("community_id, communities(*)")
+        .eq("user_id", userProfile.id);
+      if (myComms) {
+        setCommunities(myComms.map((m: any) => m.communities).filter(Boolean));
       }
     };
     fetchUser();
@@ -89,29 +99,29 @@ export function StudentDashboard() {
 
   const handleJoinClassRequest = async () => {
     if (!joinCode.trim() || !profile) return;
-    
+
     // Find class by code
     const { data: clsData, error: clsError } = await supabase
       .from('classes')
       .select('id')
       .eq('code', joinCode)
       .single();
-      
+
     if (clsError || !clsData) {
       alert("Class not found! Please check the code.");
       return;
     }
-    
+
     // Insert request
     const { error: reqError } = await supabase
       .from('room_requests')
       .insert({ class_id: clsData.id, student_id: profile.id, status: 'pending' });
-      
+
     if (reqError && reqError.code !== '23505') { // Ignore unique constraint if user already requested
       alert("Failed to send request.");
       return;
-    } 
-    
+    }
+
     setShowJoinModal(false);
     navigate(`/classroom/${joinCode}?lang=${preferredLang}`);
   };
@@ -232,7 +242,7 @@ export function StudentDashboard() {
             { icon: <CheckCircle2 className="w-5 h-5" />, label: "Submitted", value: "0", color: "#059669" },
             { icon: <Video className="w-5 h-5" />, label: "Recordings", value: enrolledClasses.length === 0 ? "0" : recordings.length.toString(), color: "#7c3aed" },
           ].map((s) => (
-             <div key={s.label} className="bg-white rounded-2xl p-5 shadow-sm" style={{ border: "1px solid #f1f5f9" }}>
+            <div key={s.label} className="bg-white rounded-2xl p-5 shadow-sm" style={{ border: "1px solid #f1f5f9" }}>
               <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: `${s.color}15`, color: s.color }}>{s.icon}</div>
               <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a" }}>{s.value}</div>
               <div className="text-xs text-gray-400 mt-0.5">{s.label}</div>
@@ -242,7 +252,7 @@ export function StudentDashboard() {
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ background: "#f1f5f9" }}>
-          {(["classes", "rooms", "assignments", "recordings"] as const).map((tab) => (
+          {(["classes", "rooms", "assignments", "recordings", "communities"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -276,25 +286,25 @@ export function StudentDashboard() {
                 </button>
               </div>
             ) : (
-               enrolledClasses.map((cls) => (
+              enrolledClasses.map((cls) => (
                 <div key={cls.id} className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow" style={{ border: "1px solid #f1f5f9" }}>
                   <div className="flex items-start justify-between mb-4">
-                     <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${cls.color || '#1e3a8a'}18`, color: cls.color || '#1e3a8a' }}>
-                        <BookOpen className="w-5 h-5" />
-                     </div>
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${cls.color || '#1e3a8a'}18`, color: cls.color || '#1e3a8a' }}>
+                      <BookOpen className="w-5 h-5" />
+                    </div>
                   </div>
                   <h3 className="mb-0.5" style={{ fontWeight: 700, color: "#0f172a" }}>{cls.name}</h3>
                   <p className="text-xs text-gray-400 mb-3">Room Code: {cls.code}</p>
                   <div className="flex items-center gap-1 text-xs text-gray-400 mb-4">
-                     <Clock className="w-3.5 h-3.5" />
-                     {cls.language} Class
+                    <Clock className="w-3.5 h-3.5" />
+                    {cls.language} Class
                   </div>
                   <button onClick={() => navigate(`/classroom/${cls.code}`)} className="w-full py-2.5 rounded-xl text-white text-sm flex items-center justify-center gap-2 hover:opacity-90" style={{ background: cls.color || '#1e3a8a' }}>
-                     <Video className="w-4 h-4" />
-                     Enter Class
+                    <Video className="w-4 h-4" />
+                    Enter Class
                   </button>
                 </div>
-               ))
+              ))
             )}
           </div>
         )}
@@ -321,6 +331,38 @@ export function StudentDashboard() {
             <Video className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-gray-900 font-bold mb-1">No Recordings Available</h3>
             <p className="text-sm text-gray-500">Past class sessions and their transcripts will appear here.</p>
+          </div>
+        )}
+
+        {/* Communities Tab */}
+        {activeTab === "communities" && communities.length === 0 && (
+          <div className="text-center py-16 px-4 rounded-2xl border-2 border-dashed" style={{ borderColor: "#cbd5e1", background: "transparent" }}>
+            <Radio className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-gray-900 font-bold mb-1">No Communities</h3>
+            <p className="text-sm text-gray-500 mb-4">You haven't joined any communities. Explore public communities or get a join code.</p>
+            <button onClick={() => navigate("/community")} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#7c3aed" }}>
+              Explore Communities
+            </button>
+          </div>
+        )}
+
+        {activeTab === "communities" && communities.length > 0 && (
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {communities.map((comm) => (
+              <div key={comm.id} className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow" style={{ border: "1px solid #f1f5f9" }}>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold" style={{ background: comm.color || '#1e3a8a' }}>
+                    {comm.avatar || comm.name.substring(0, 2).toUpperCase()}
+                  </div>
+                </div>
+                <h3 className="mb-0.5" style={{ fontWeight: 700, color: "#0f172a" }}>{comm.name}</h3>
+                <p className="text-xs text-gray-400 capitalize mb-3">{comm.type} Community</p>
+                <button onClick={() => navigate(`/community/${comm.id}`)} className="w-full py-2.5 rounded-xl text-white text-sm flex items-center justify-center gap-2 hover:opacity-90" style={{ background: comm.color || '#1e3a8a' }}>
+                  <Radio className="w-4 h-4" />
+                  Enter Community
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </main>
