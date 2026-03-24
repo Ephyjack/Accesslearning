@@ -514,7 +514,7 @@ export function ClassroomInterface() {
                   <div className="absolute bottom-6 right-6 rounded-xl overflow-hidden shadow-2xl z-10 cursor-move" style={{ width: 280, height: 160, border: "2px solid rgba(124,58,237,0.5)", background: "#1e293b" }}>
                     {activeSpeaker && (
                       <ParticipantTile
-                        trackRef={{ participant: activeSpeaker as Participant, source: Track.Source.Camera } as any}
+                        trackRef={{ participant: activeSpeaker as Participant, source: Track.Source.Camera, publication: (activeSpeaker as Participant).getTrackPublication(Track.Source.Camera) } as any}
                         className="w-full h-full object-cover"
                       />
                     )}
@@ -525,7 +525,7 @@ export function ClassroomInterface() {
                   {allParticipants.length > 0 ? (
                     allParticipants.map((p: any) => (
                       <div key={p.identity} className="relative rounded-xl overflow-hidden shadow-lg border border-white/5 bg-black" style={{ minHeight: "300px" }}>
-                        <ParticipantTile trackRef={{ participant: p as Participant, source: Track.Source.Camera } as any} className="w-full h-full object-cover" />
+                        <ParticipantTile trackRef={{ participant: p as Participant, source: Track.Source.Camera, publication: p.getTrackPublication(Track.Source.Camera) } as any} className="w-full h-full object-cover" />
                       </div>
                     ))
                   ) : (
@@ -630,7 +630,7 @@ export function ClassroomInterface() {
                   return (
                     <div key={p.identity} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5">
                       <div className="w-12 h-12 rounded bg-blue-500/20 overflow-hidden relative">
-                        <ParticipantTile trackRef={{ participant: p as Participant, source: Track.Source.Camera } as any} className="w-full h-full object-cover" />
+                        <ParticipantTile trackRef={{ participant: p as Participant, source: Track.Source.Camera, publication: p.getTrackPublication(Track.Source.Camera) } as any} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1 overflow-hidden">
                         <div className="text-sm text-gray-200 truncate">{p.identity} {isLocal && "(You)"}</div>
