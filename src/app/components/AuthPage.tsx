@@ -27,50 +27,69 @@ export function AuthPage() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  try {
-    if (mode === "signup") {
-      // SIGN UP USER
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+    try {
+      if (mode === "signup") {
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("email", email)
+          .maybeSingle();
 
-      if (error) throw error;
+        if (existingProfile) {
+          throw new Error(`This email is already registered as a ${existingProfile.role}. Please log in instead.`);
+        }
 
-      // Redirect to onboarding with role + name
-      navigate(`/onboarding?role=${role}&name=${encodeURIComponent(name)}`);
-    } else {
-      // LOGIN USER
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+        // SIGN UP USER
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      // After login → check profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single();
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          throw new Error("This email is already registered. Please log in instead.");
+        }
 
-      if (!profile) {
-        navigate("/onboarding");
-        return;
+        // Redirect to onboarding with role + name
+        navigate(`/onboarding?role=${role}&name=${encodeURIComponent(name)}`);
+      } else {
+        // LOGIN USER
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        // After login → check profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        if (!profile) {
+          navigate(`/onboarding?role=${role}`);
+          return;
+        }
+
+        if (profile.role !== role) {
+          await supabase.auth.signOut();
+          throw new Error(`This email is registered as a ${profile.role}. Please select the ${profile.role} role to sign in.`);
+        }
+
+        if (profile.role === "teacher") navigate("/teacher");
+        else navigate("/student");
       }
-
-      if (profile.role === "teacher") navigate("/teacher");
-      else navigate("/student");
+    } catch (err: any) {
+      console.error(err.message);
+      alert(err.message); // temporary error handling
     }
-  } catch (err: any) {
-    console.error(err.message);
-    alert(err.message); // temporary error handling
-  }
-};
+  };
 
   return (
     <div className="min-h-screen flex" style={{ background: "#f8faff" }}>

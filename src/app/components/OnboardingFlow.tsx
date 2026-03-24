@@ -56,7 +56,7 @@ const finish = async () => {
     }
 
     // Insert profile into database
-    const { error } = await supabase.from("profiles").insert({
+    const { error } = await supabase.from("profiles").upsert({
       id: user.id,
       email: user.email,
       full_name: searchParams.get("name") || "",

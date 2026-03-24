@@ -1,39 +1,303 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { supabase } from "./supabaseClient";
 import {
   GraduationCap,
   Plus,
+  Copy,
+  Users,
   BarChart2,
+  BookOpen,
   Clock,
+  Video,
+  MoreVertical,
+  Bell,
+  Search,
+  TrendingUp,
   CheckCircle2,
   FileText,
   Layers,
   LogOut,
   Settings,
   ChevronRight,
+  Globe,
+  Mic,
+  Radio,
+  ShieldCheck,
+  UserCheck,
+  UserX,
+  Hash,
+  Lock,
+} from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
 
-const engagementData = [
-  { day: "Mon", students: 18 },
-  { day: "Tue", students: 24 },
-  { day: "Wed", students: 21 },
-  { day: "Thu", students: 30 },
-  { day: "Fri", students: 27 },
-  { day: "Sat", students: 14 },
-  { day: "Sun", students: 10 },
-];
-  const handleRequest = (id: string, action: "approved" | "blocked") => {
-    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: action } : r)));
+// -----------------------
+// Teacher Dashboard Component
+// -----------------------
+export function TeacherDashboard() {
+  const navigate = useNavigate();
+
+  // -----------------------
+  // Tabs & Modals
+  // -----------------------
+  const [activeTab, setActiveTab] = useState<"classes" | "rooms">("classes");
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+
+  // -----------------------
+  // Profile & Data
+  // -----------------------
+  const [profile, setProfile] = useState<any>(null);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const [newClassName, setNewClassName] = useState("");
+  const [newClassLang, setNewClassLang] = useState("English");
+
+  const handleCreateClass = async () => {
+    if (!newClassName.trim() || !profile) return;
+    
+    // Generate a random 6-character code for the class
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    const { data, error } = await supabase
+      .from("classes")
+      .insert({
+        name: newClassName,
+        code: code,
+        language: newClassLang,
+        teacher_id: profile.id,
+        status: "active",
+        students_count: 0
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("Failed to create class: " + error.message);
+      return;
+    }
+    
+    setShowCreateModal(false);
+    navigate(`/classroom/${code}`);
   };
 
-  const pendingCount = requests.filter((r) => r.status === "pending").length;
+  const handleDeleteClass = async (id: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this class?")) return;
+    const { error } = await supabase.from("classes").delete().eq("id", id);
+    if (!error) {
+       setClasses(prev => prev.filter(c => c.id !== id));
+    } else {
+       alert("Failed to delete class.");
+    }
+  };
 
+  // -----------------------
+  // Engagement, assignments, communities
+  // -----------------------
+  const [engagementData, setEngagementData] = useState<any[]>([]);
+  const [recentAssignments, setRecentAssignments] = useState<any[]>([]);
+  const [communities, setCommunities] = useState<any[]>([]);
+  const [copiedCode, setCopiedCode] = useState<string>("");
+
+  // -----------------------
+  // Copy Class Code
+  // -----------------------
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(""), 1500);
+  };
+
+  // Fetch communities
+  useEffect(() => {
+    const fetchCommunities = async () => {
+      if (!profile) return;
+      const { data, error } = await supabase
+        .from("communities")
+        .select("*")
+        .eq("teacher_id", profile.id);
+
+      if (error) console.error(error);
+      else setCommunities(data || []);
+    };
+    fetchCommunities();
+  }, [profile]);
+
+  // Fetch recent assignments
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      if (!profile) return;
+      const { data, error } = await supabase
+        .from("assignments")
+        .select("*")
+        .eq("teacher_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      if (error) console.error(error);
+      else setRecentAssignments(data || []);
+    };
+    fetchAssignments();
+  }, [profile]);
+
+  // Fetch weekly attendance / engagement data
+  useEffect(() => {
+    const fetchEngagement = async () => {
+      if (!profile) return;
+      const { data, error } = await supabase
+        .from("attendance")
+        .select("day, students")
+        .eq("teacher_id", profile.id)
+        .order("day", { ascending: true });
+
+      if (error) console.error(error);
+      else setEngagementData(data || []);
+    };
+    fetchEngagement();
+  }, [profile]);
+
+  // -----------------------
+  // Fetch profile
+  // -----------------------
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) throw userError;
+
+        if (!user) {
+          navigate("/login");
+          return;
+        }
+
+        // Fetch profile from 'profiles' table
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+
+        if (error) throw error;
+
+        setProfile(data);
+
+        // Redirect if user is not a teacher
+        if (data.role !== "teacher") {
+          navigate("/student");
+          return;
+        }
+
+      } catch (err: any) {
+        console.error(err.message);
+        alert("Error loading profile. Please log in again.");
+        navigate("/login");
+      }
+    };
+
+    fetchProfile();
+  }, [navigate]);
+
+  // -----------------------
+  // Fetch persistent rooms
+  // -----------------------
+  const [rooms, setRooms] = useState<any[]>([]);
+
+  // Fetch persistent rooms created by this teacher
+  useEffect(() => {
+    if (!profile) return;
+
+    const fetchRooms = async () => {
+      const { data, error } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("teacher_id", profile.id)
+        .order("created_at", { ascending: false });
+
+      if (error) console.error(error);
+      else setRooms(data);
+    };
+
+    fetchRooms();
+
+    // Optional: subscribe to realtime changes
+    const subscription = supabase
+      .channel("public:rooms")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rooms",
+          filter: `teacher_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          fetchRooms(); // refresh rooms when any change occurs
+        },
+      )
+      .subscribe();
+
+    // Cleanup on unmount
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [profile]);
+
+  // -----------------------
+  // Fetch classes and pending requests
+  // -----------------------
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!profile) return;
+
+      // Fetch all classes for this teacher
+      const { data: clsData, error: clsError } = await supabase
+        .from("classes")
+        .select("*")
+        .eq("teacher_id", profile.id)
+        .order("created_at", { ascending: false });
+
+      if (clsError) {
+        console.error(clsError);
+      } else if (clsData) {
+        setClasses(clsData);
+
+        // Fetch pending requests for these classes
+        const classIds = clsData.map(c => c.id);
+        if (classIds.length > 0) {
+           const { data: reqs } = await supabase
+             .from("room_requests")
+             .select("id")
+             .in("class_id", classIds)
+             .eq("status", "pending");
+           
+           setPendingCount(reqs ? reqs.length : 0);
+        }
+      }
+    };
+    fetchDashboardData();
+  }, [profile]);
+
+  // -----------------------
+  // Render JSX: Top bar
+  // -----------------------
   return (
-    <div className="min-h-screen flex" style={{ background: "#f8faff" }}>
-      {/* Sidebar */}
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar here if any */}
       <aside
         className="w-64 flex flex-col fixed h-full z-20"
         style={{
@@ -50,7 +314,10 @@ const engagementData = [
             >
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-white" style={{ fontWeight: 700, fontSize: "1.05rem" }}>
+            <span
+              className="text-white"
+              style={{ fontWeight: 700, fontSize: "1.05rem" }}
+            >
               Access<span style={{ color: "#a78bfa" }}>Learn</span>
             </span>
           </div>
@@ -58,28 +325,72 @@ const engagementData = [
             className="mt-3 text-xs px-2 py-1 rounded-full inline-block"
             style={{ background: "rgba(124,58,237,0.25)", color: "#c4b5fd" }}
           >
-            Teacher Account
+            {profile?.role === "teacher"
+              ? "Teacher Account"
+              : "Student Account"}
           </div>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3">
           {[
-            { icon: <Layers className="w-4 h-4" />, label: "Dashboard", active: true, action: undefined as (() => void) | undefined },
-            { icon: <BookOpen className="w-4 h-4" />, label: "My Classes", active: false, action: undefined as (() => void) | undefined },
-            { icon: <Radio className="w-4 h-4" />, label: "Communities", active: false, action: (() => navigate("/community")) as (() => void) },
-            { icon: <FileText className="w-4 h-4" />, label: "Assignments", active: false, action: undefined as (() => void) | undefined },
-            { icon: <BarChart2 className="w-4 h-4" />, label: "Analytics", active: false, action: undefined as (() => void) | undefined },
-            { icon: <ShieldCheck className="w-4 h-4" />, label: "Access Control", active: false, action: (() => setShowAccessModal(true)) as (() => void) },
-            { icon: <Mic className="w-4 h-4" />, label: "Recordings", active: false, action: undefined as (() => void) | undefined },
-            { icon: <Globe className="w-4 h-4" />, label: "Languages", active: false, action: undefined as (() => void) | undefined },
+            {
+              icon: <Layers className="w-4 h-4" />,
+              label: "Dashboard",
+              active: true,
+              action: undefined as (() => void) | undefined,
+            },
+            {
+              icon: <BookOpen className="w-4 h-4" />,
+              label: "My Classes",
+              active: false,
+              action: undefined as (() => void) | undefined,
+            },
+            {
+              icon: <Radio className="w-4 h-4" />,
+              label: "Communities",
+              active: false,
+              action: (() => navigate("/community")) as () => void,
+            },
+            {
+              icon: <FileText className="w-4 h-4" />,
+              label: "Assignments",
+              active: false,
+              action: undefined as (() => void) | undefined,
+            },
+            {
+              icon: <BarChart2 className="w-4 h-4" />,
+              label: "Analytics",
+              active: false,
+              action: undefined as (() => void) | undefined,
+            },
+            {
+              icon: <ShieldCheck className="w-4 h-4" />,
+              label: "Access Control",
+              active: false,
+              action: (() => setShowAccessModal(true)) as () => void,
+            },
+            {
+              icon: <Mic className="w-4 h-4" />,
+              label: "Recordings",
+              active: false,
+              action: undefined as (() => void) | undefined,
+            },
+            {
+              icon: <Globe className="w-4 h-4" />,
+              label: "Languages",
+              active: false,
+              action: undefined as (() => void) | undefined,
+            },
           ].map((item) => (
             <button
               key={item.label}
               onClick={item.action}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 text-sm transition-all"
               style={{
-                background: item.active ? "rgba(124,58,237,0.25)" : "transparent",
+                background: item.active
+                  ? "rgba(124,58,237,0.25)"
+                  : "transparent",
                 color: item.active ? "#c4b5fd" : "rgba(255,255,255,0.5)",
                 fontWeight: item.active ? 600 : 400,
                 textAlign: "left",
@@ -90,7 +401,11 @@ const engagementData = [
               {item.label === "Access Control" && pendingCount > 0 && (
                 <span
                   className="ml-auto w-5 h-5 rounded-full flex items-center justify-center text-white animate-pulse"
-                  style={{ background: "#ef4444", fontSize: "0.65rem", fontWeight: 700 }}
+                  style={{
+                    background: "#ef4444",
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                  }}
                 >
                   {pendingCount}
                 </span>
@@ -98,20 +413,48 @@ const engagementData = [
             </button>
           ))}
         </nav>
-        {/* Bottom */}
-        <div className="p-4 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+
+        {/* Bottom: Dynamic Profile */}
+        <div
+          className="p-4 border-t"
+          style={{ borderColor: "rgba(255,255,255,0.06)" }}
+        >
           <div className="flex items-center gap-3 mb-4">
             <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-sm text-white"
-              style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
+              className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-sm text-white"
+              style={{
+                fontWeight: 700,
+                background: "linear-gradient(135deg, #1e3a8a, #7c3aed)",
+              }}
             >
-              SM
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt="avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                profile?.full_name
+                  .split(" ")
+                  .filter((w: string) => w.length > 0) // remove empty strings
+                  .map((w: string) => w[0].toUpperCase()) // take first letter and uppercase
+                  .join("")
+                  .slice(0, 2)
+              )}
             </div>
             <div>
-              <div className="text-white text-sm" style={{ fontWeight: 600 }}>Sofia Mendez</div>
-              <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>sofia@school.edu</div>
+              <div className="text-white text-sm font-semibold">
+                {profile?.full_name || "Teacher Name"}
+              </div>
+              <div
+                className="text-xs"
+                style={{ color: "rgba(255,255,255,0.4)" }}
+              >
+                {profile?.email || "email@example.com"}
+              </div>
             </div>
           </div>
+
           <div className="flex gap-2">
             <button
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs transition-all hover:bg-white/10"
@@ -132,25 +475,38 @@ const engagementData = [
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 ml-64 p-8">
         {/* Top bar */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a" }}>
-              Good afternoon, Sofia 👋
+            <h1
+              style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a" }}
+            >
+              Good afternoon, {profile?.full_name?.split(" ")[0] || "Teacher"}{" "}
+              👋
             </h1>
-            <p className="text-sm text-gray-400 mt-0.5">You have 2 classes scheduled today</p>
+            <p className="text-sm text-gray-400 mt-0.5">
+              You have {classes.length}{" "}
+              {classes.length === 1 ? "class" : "classes"} scheduled today
+            </p>
           </div>
+
           <div className="flex items-center gap-3">
+            {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 placeholder="Search classes…"
                 className="pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none"
-                style={{ borderColor: "#e2e8f0", background: "white", minWidth: 220 }}
+                style={{
+                  borderColor: "#e2e8f0",
+                  background: "white",
+                  minWidth: 220,
+                }}
               />
             </div>
+
+            {/* Notifications */}
             <button
               onClick={() => setShowAccessModal(true)}
               className="relative p-2.5 rounded-xl bg-white border"
@@ -164,10 +520,14 @@ const engagementData = [
                 />
               )}
             </button>
+
+            {/* Create Classroom */}
             <button
               onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90"
-              style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+              style={{
+                background: "linear-gradient(135deg, #1e3a8a, #7c3aed)",
+              }}
             >
               <Plus className="w-4 h-4" />
               Create Classroom
@@ -178,12 +538,43 @@ const engagementData = [
         {/* Stats row */}
         <div className="grid grid-cols-4 gap-5 mb-8">
           {[
-            { icon: <Users className="w-5 h-5" />, label: "Total Students", value: "124", change: "+8 this week", color: "#1e3a8a" },
-            { icon: <BookOpen className="w-5 h-5" />, label: "Active Classes", value: "4", change: "2 live today", color: "#7c3aed" },
-            { icon: <TrendingUp className="w-5 h-5" />, label: "Avg. Engagement", value: "86%", change: "+4% vs last week", color: "#059669" },
-            { icon: <CheckCircle2 className="w-5 h-5" />, label: "Assignments Due", value: "13", change: "3 need grading", color: "#d97706" },
+            {
+              icon: <Users className="w-5 h-5" />,
+              label: "Total Students",
+              value: classes.reduce((acc, cls) => acc + (cls.students_count || 0), 0),
+              change: classes.length === 0 ? "0 this week" : "+8 this week",
+              color: "#1e3a8a",
+            },
+            {
+              icon: <BookOpen className="w-5 h-5" />,
+              label: "Active Classes",
+              value: classes.filter((cls) => cls.status === "active").length,
+              change: classes.length === 0 ? "0 live today" : "2 live today",
+              color: "#7c3aed",
+            },
+            {
+              icon: <TrendingUp className="w-5 h-5" />,
+              label: "Avg. Engagement",
+              value: classes.length === 0 ? "0%" : "86%", // Placeholder, can be dynamic
+              change: classes.length === 0 ? "0% vs last week" : "+4% vs last week",
+              color: "#059669",
+            },
+            {
+              icon: <CheckCircle2 className="w-5 h-5" />,
+              label: "Assignments Due",
+              value: classes.reduce(
+                (acc, cls) => acc + (cls.assignments || 0),
+                0,
+              ),
+              change: classes.length === 0 ? "0 need grading" : "3 need grading",
+              color: "#d97706",
+            },
           ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-2xl p-5 shadow-sm" style={{ border: "1px solid #f1f5f9" }}>
+            <div
+              key={stat.label}
+              className="bg-white rounded-2xl p-5 shadow-sm"
+              style={{ border: "1px solid #f1f5f9" }}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center"
@@ -192,16 +583,29 @@ const engagementData = [
                   {stat.icon}
                 </div>
               </div>
-              <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a" }}>{stat.value}</div>
+              <div
+                style={{
+                  fontSize: "1.75rem",
+                  fontWeight: 800,
+                  color: "#0f172a",
+                }}
+              >
+                {stat.value}
+              </div>
               <div className="text-xs text-gray-400 mt-0.5">{stat.label}</div>
-              <div className="text-xs mt-1" style={{ color: stat.color }}>{stat.change}</div>
+              <div className="text-xs mt-1" style={{ color: stat.color }}>
+                {stat.change}
+              </div>
             </div>
           ))}
         </div>
 
         {/* Tab toggle */}
         <div className="flex items-center gap-3 mb-5">
-          <div className="flex p-1 rounded-xl" style={{ background: "#f1f5f9" }}>
+          <div
+            className="flex p-1 rounded-xl"
+            style={{ background: "#f1f5f9" }}
+          >
             {(["classes", "rooms"] as const).map((t) => (
               <button
                 key={t}
@@ -211,18 +615,22 @@ const engagementData = [
                   background: activeTab === t ? "white" : "transparent",
                   color: activeTab === t ? "#0f172a" : "#64748b",
                   fontWeight: activeTab === t ? 600 : 400,
-                  boxShadow: activeTab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  boxShadow:
+                    activeTab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
                 }}
               >
                 {t === "classes" ? "Classrooms" : "Persistent Rooms"}
               </button>
             ))}
           </div>
+
           {activeTab === "rooms" && (
             <button
               onClick={() => setShowCreateRoomModal(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm hover:opacity-90 transition-all"
-              style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+              style={{
+                background: "linear-gradient(135deg, #1e3a8a, #7c3aed)",
+              }}
             >
               <Plus className="w-4 h-4" />
               New Room
@@ -230,266 +638,362 @@ const engagementData = [
           )}
         </div>
 
-        {/* Main grid */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left: classes or rooms */}
-          <div className="lg:col-span-2 space-y-4">
-            {activeTab === "classes" ? (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0f172a" }}>My Classrooms</h2>
-                  <button className="text-xs text-violet-600 flex items-center gap-1">
-                    View all <ChevronRight className="w-3 h-3" />
+        {/* Main grid left column */}
+        <div className="lg:col-span-2 space-y-4">
+          {activeTab === "classes" ? (
+            <>
+              <div className="flex items-center justify-between mb-1">
+                <h2
+                  style={{
+                    fontSize: "1.1rem",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
+                  My Classrooms
+                </h2>
+                <button className="text-xs text-violet-600 flex items-center gap-1">
+                  View all <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {classes.length === 0 && (
+                <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
+                    <BookOpen className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">No classes yet</h3>
+                  <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't created any classrooms. Click "Create Classroom" to get started.</p>
+                  <button onClick={() => setShowCreateModal(true)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#7c3aed" }}>
+                    Create Classroom
                   </button>
                 </div>
-                {classes.map((cls) => (
-                  <div
-                    key={cls.id}
-                    className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
-                    style={{ border: "1px solid #f1f5f9" }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-4">
-                        <div
-                          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                          style={{ background: `${cls.color}18`, color: cls.color }}
-                        >
-                          <BookOpen className="w-5 h-5" />
+              )}
+
+              {classes.map((cls) => (
+                <div
+                  key={cls.id}
+                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                  style={{ border: "1px solid #f1f5f9" }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                        style={{
+                          background: `${cls.color}18`,
+                          color: cls.color,
+                        }}
+                      >
+                        <BookOpen className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                            {cls.name}
+                          </span>
+                          {cls.status === "active" && (
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                background: "#dcfce7",
+                                color: "#16a34a",
+                              }}
+                            >
+                              Scheduled Today
+                            </span>
+                          )}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span style={{ fontWeight: 700, color: "#0f172a" }}>{cls.name}</span>
-                            {cls.status === "active" && (
-                              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#dcfce7", color: "#16a34a" }}>
-                                Scheduled Today
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 mt-1">
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
-                              <Users className="w-3.5 h-3.5" />{cls.students} students
-                            </span>
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" />{cls.nextSession}
-                            </span>
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
-                              <Globe className="w-3.5 h-3.5" />{cls.language}
-                            </span>
-                          </div>
+                        <div className="flex items-center gap-4 mt-1">
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5" /> {cls.students}{" "}
+                            students
+                          </span>
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" /> {cls.nextSession}
+                          </span>
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Globe className="w-3.5 h-3.5" /> {cls.language}
+                          </span>
                         </div>
                       </div>
-                      <button className="text-gray-400 hover:text-gray-600">
-                        <MoreVertical className="w-4 h-4" />
+                    </div>
+
+                    <button className="text-gray-400 hover:text-gray-600">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">Class Code:</span>
+                      <code
+                        className="text-xs px-2.5 py-1 rounded-lg"
+                        style={{
+                          background: "#f1f5f9",
+                          color: "#0f172a",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {cls.code}
+                      </code>
+                      <button
+                        onClick={() => copyCode(cls.code)}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        {copiedCode === cls.code ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-gray-400" />
+                        )}
                       </button>
                     </div>
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400">Class Code:</span>
-                        <code className="text-xs px-2.5 py-1 rounded-lg" style={{ background: "#f1f5f9", color: "#0f172a", fontWeight: 600 }}>
-                          {cls.code}
-                        </code>
-                        <button onClick={() => copyCode(cls.code)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                          {copiedCode === cls.code ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5 text-gray-400" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-gray-50"
-                          style={{ borderColor: "#e2e8f0", color: "#64748b" }}
-                        >
-                          Assignments ({cls.assignments})
-                        </button>
-                        <button
-                          onClick={() => navigate(`/classroom/${cls.id}`)}
-                          className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 transition-all hover:opacity-90"
-                          style={{ background: cls.color }}
-                        >
-                          <Video className="w-3.5 h-3.5" />
-                          Start Class
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0f172a" }}>Persistent Rooms</h2>
-                  <span className="text-xs text-gray-400">Always visible, even when offline</span>
-                </div>
-                {ROOMS.map((room) => (
-                  <div
-                    key={room.id}
-                    className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
-                    style={{ border: "1px solid #f1f5f9" }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div
-                          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                          style={{ background: room.live ? "rgba(34,197,94,0.1)" : "#f1f5f9", color: room.live ? "#16a34a" : "#94a3b8" }}
-                        >
-                          <Radio className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span style={{ fontWeight: 700, color: "#0f172a" }}>{room.name}</span>
-                            <span
-                              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
-                              style={{ background: room.live ? "rgba(34,197,94,0.1)" : "#f1f5f9", color: room.live ? "#16a34a" : "#94a3b8" }}
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full" style={{ background: room.live ? "#22c55e" : "#94a3b8" }} />
-                              {room.live ? "Live" : "Offline"}
-                            </span>
-                            {room.pendingCount > 0 && (
-                              <span
-                                className="text-xs px-2 py-0.5 rounded-full animate-pulse"
-                                style={{ background: "rgba(251,191,36,0.15)", color: "#d97706" }}
-                              >
-                                {room.pendingCount} waiting
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
-                              <Users className="w-3.5 h-3.5" />{room.participants} participants
-                            </span>
-                            <span className="text-xs text-gray-400">{room.sessions} sessions total</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {room.pendingCount > 0 && (
-                          <button
-                            onClick={() => setShowAccessModal(true)}
-                            className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
-                            style={{ background: "rgba(251,191,36,0.1)", color: "#d97706" }}
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            Requests
-                          </button>
-                        )}
-                        <button
-                          onClick={() => navigate(`/classroom/${room.id}`)}
-                          className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90"
-                          style={{ background: room.live ? "#16a34a" : "#1e3a8a" }}
-                        >
-                          <Video className="w-3.5 h-3.5" />
-                          {room.live ? "Enter Room" : "Start Class"}
-                        </button>
-                        <button
-                          className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-red-50 transition-colors"
-                          style={{ border: "1px solid #fecaca", color: "#ef4444" }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
 
-          {/* Right col */}
-          <div className="space-y-5">
-            {/* Engagement chart */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm" style={{ border: "1px solid #f1f5f9" }}>
-              <h3 className="mb-4" style={{ fontWeight: 700, color: "#0f172a" }}>Weekly Attendance</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDeleteClass(cls.id)}
+                        className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-red-50"
+                        style={{ border: "1px solid #fecaca", color: "#ef4444" }}
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => navigate(`/classroom/${cls.code}`)}
+                        className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 transition-all hover:opacity-90"
+                        style={{ background: cls.color || '#1e3a8a' }}
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        Start Class
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {/* Dynamic Rooms */}
+              {rooms.length === 0 && (
+                <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+                    <Radio className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">No persistent rooms</h3>
+                  <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't opened any persistent rooms. Persistent rooms are always available for students to request access.</p>
+                  <button onClick={() => setShowCreateRoomModal(true)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#1e3a8a" }}>
+                    Create Room
+                  </button>
+                </div>
+              )}
+              {rooms.map((room) => (
+                <div
+                  key={room.id}
+                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                  style={{ border: "1px solid #f1f5f9" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                        style={{
+                          background: room.live
+                            ? "rgba(34,197,94,0.1)"
+                            : "#f1f5f9",
+                          color: room.live ? "#16a34a" : "#94a3b8",
+                        }}
+                      >
+                        <Radio className="w-5 h-5" />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                            {room.name}
+                          </span>
+                          <span
+                            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                            style={{
+                              background: room.live
+                                ? "rgba(34,197,94,0.1)"
+                                : "#f1f5f9",
+                              color: room.live ? "#16a34a" : "#94a3b8",
+                            }}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{
+                                background: room.live ? "#22c55e" : "#94a3b8",
+                              }}
+                            />
+                            {room.live ? "Live" : "Offline"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5" />
+                            {room.participants || 0} participants
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {room.sessions || 0} sessions total
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      {room.pendingCount > 0 && (
+                        <button
+                          onClick={() => setShowAccessModal(true)}
+                          className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                          style={{
+                            background: "rgba(251,191,36,0.1)",
+                            color: "#d97706",
+                          }}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          Requests
+                        </button>
+                      )}
+                      <button
+                        onClick={() => navigate(`/classroom/${room.id}`)}
+                        className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90"
+                        style={{
+                          background: room.live ? "#16a34a" : "#1e3a8a",
+                        }}
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        {room.live ? "Enter Room" : "Start Class"}
+                      </button>
+                      <button
+                        className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-red-50 transition-colors"
+                        style={{
+                          border: "1px solid #fecaca",
+                          color: "#ef4444",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-5">
+          {/* Weekly Attendance Chart */}
+          <div
+            className="bg-white rounded-2xl p-5 shadow-sm"
+            style={{ border: "1px solid #f1f5f9" }}
+          >
+            <h3 className="mb-4" style={{ fontWeight: 700, color: "#0f172a" }}>
+              Weekly Attendance
+            </h3>
+
+            {engagementData.length > 0 ? (
               <ResponsiveContainer width="100%" height={140}>
-                <AreaChart data={engagementData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <AreaChart
+                  data={engagementData}
+                  margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
+                >
                   <defs>
                     <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.2} />
                       <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
-                  <Area type="monotone" dataKey="students" stroke="#7c3aed" strokeWidth={2} fill="url(#gradBlue)" />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 8,
+                      border: "1px solid #e2e8f0",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="students"
+                    stroke="#7c3aed"
+                    strokeWidth={2}
+                    fill="url(#gradBlue)"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+            ) : (
+              <p className="text-xs text-gray-400">
+                No attendance data available.
+              </p>
+            )}
+          </div>
 
-            {/* Assignments panel */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm" style={{ border: "1px solid #f1f5f9" }}>
-              <h3 className="mb-4" style={{ fontWeight: 700, color: "#0f172a" }}>Recent Assignments</h3>
+          {/* Recent Assignments */}
+          <div
+            className="bg-white rounded-2xl p-5 shadow-sm"
+            style={{ border: "1px solid #f1f5f9" }}
+          >
+            <h3 className="mb-4" style={{ fontWeight: 700, color: "#0f172a" }}>
+              Recent Assignments
+            </h3>
+
+            {recentAssignments.length > 0 ? (
               <div className="space-y-4">
                 {recentAssignments.map((a) => (
-                  <div key={a.title}>
+                  <div key={a.id}>
                     <div className="flex items-start justify-between mb-1">
                       <div>
-                        <div className="text-sm" style={{ fontWeight: 600, color: "#0f172a" }}>{a.title}</div>
-                        <div className="text-xs text-gray-400">{a.class} · Due {a.due}</div>
+                        <div
+                          className="text-sm"
+                          style={{ fontWeight: 600, color: "#0f172a" }}
+                        >
+                          {a.title}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {a.class_name} · Due {a.due_date}
+                        </div>
                       </div>
-                      <span className="text-xs text-gray-500">{a.submissions}/{a.total}</span>
+                      <span className="text-xs text-gray-500">
+                        {a.submissions_count}/{a.total_students}
+                      </span>
                     </div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#f1f5f9" }}>
+                    <div
+                      className="h-1.5 rounded-full overflow-hidden"
+                      style={{ background: "#f1f5f9" }}
+                    >
                       <div
                         className="h-full rounded-full"
-                        style={{ width: `${(a.submissions / a.total) * 100}%`, background: "linear-gradient(90deg, #1e3a8a, #7c3aed)" }}
+                        style={{
+                          width: `${
+                            a.total_students > 0
+                              ? (a.submissions_count / a.total_students) * 100
+                              : 0
+                          }%`,
+                          background:
+                            "linear-gradient(90deg, #1e3a8a, #7c3aed)",
+                        }}
                       />
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Communities shortcut */}
-            <div
-              className="rounded-2xl p-5"
-              style={{ background: "linear-gradient(135deg, #0f172a, #1e3a8a)" }}
-            >
-              <h3 className="text-white mb-1" style={{ fontWeight: 700 }}>Communities</h3>
-              <p className="text-xs text-blue-300 mb-4">Your active learning communities</p>
-              {[
-                { name: "LSU Science Dept.", code: "c1", color: "#1e3a8a", type: "school", unread: 3 },
-                { name: "Global Physics Hub", code: "c2", color: "#7c3aed", type: "public", unread: 0 },
-              ].map((c) => (
-                <button
-                  key={c.code}
-                  onClick={() => navigate(`/community/${c.code}`)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1.5 transition-all hover:bg-white/10 text-left"
-                >
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
-                    style={{ background: c.color, fontWeight: 700 }}
-                  >
-                    {c.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white text-xs truncate" style={{ fontWeight: 600 }}>{c.name}</div>
-                    <div className="text-blue-400 text-xs capitalize">{c.type}</div>
-                  </div>
-                  {c.unread > 0 && (
-                    <span
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-white"
-                      style={{ background: "#7c3aed", fontSize: "0.6rem", fontWeight: 700 }}
-                    >
-                      {c.unread}
-                    </span>
-                  )}
-                </button>
-              ))}
-              <button
-                onClick={() => navigate("/community")}
-                className="w-full mt-2 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5"
-                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)" }}
-              >
-                View all communities <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
+            ) : (
+              <p className="text-xs text-gray-400">No recent assignments.</p>
+            )}
           </div>
-        </div>
-      </main>
-
-      {/* ── Modals ── */}
+          
+                {/* ── Modals ── */}
 
       {/* Create Classroom Modal */}
       {showCreateModal && (
@@ -513,7 +1017,7 @@ const engagementData = [
             </div>
             <div className="mb-6">
               <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Primary Language</label>
-              <select className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+              <select value={newClassLang} onChange={(e) => setNewClassLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
                 <option>English</option>
                 <option>Spanish</option>
                 <option>French</option>
@@ -529,7 +1033,7 @@ const engagementData = [
                 Cancel
               </button>
               <button
-                onClick={() => { setShowCreateModal(false); navigate("/classroom/cls-new"); }}
+                onClick={handleCreateClass}
                 className="flex-1 py-3 rounded-xl text-white text-sm"
                 style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
               >
@@ -540,164 +1044,80 @@ const engagementData = [
         </div>
       )}
 
-      {/* Create Room Modal */}
-      {showCreateRoomModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
-          onClick={() => setShowCreateRoomModal(false)}
-        >
-          <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 460 }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create Persistent Room</h2>
-            <p className="text-sm text-gray-400 mb-6">Rooms stay visible to students even when offline. Only you can start a session.</p>
-            <div className="mb-4">
-              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Room Name</label>
-              <input
-                value={newRoomName}
-                onChange={(e) => setNewRoomName(e.target.value)}
-                placeholder="e.g. SS1 Physics Room"
-                className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
-                style={{ borderColor: "#e2e8f0" }}
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Access Control</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "Open — anyone in community", icon: <Hash className="w-4 h-4" /> },
-                  { label: "Approval required", icon: <Lock className="w-4 h-4" /> },
-                ].map((opt, i) => (
-                  <button
-                    key={i}
-                    className="flex items-center gap-2 p-3 rounded-xl border text-xs text-left"
-                    style={{ borderColor: i === 1 ? "#7c3aed" : "#e2e8f0", color: i === 1 ? "#7c3aed" : "#64748b" }}
-                  >
-                    {opt.icon}
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCreateRoomModal(false)}
-                className="flex-1 py-3 rounded-xl border text-sm"
-                style={{ borderColor: "#e2e8f0", color: "#64748b" }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => setShowCreateRoomModal(false)}
-                className="flex-1 py-3 rounded-xl text-white text-sm"
-                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
-              >
-                Create Room
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Access Management Modal */}
-      {showAccessModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
-          onClick={() => setShowAccessModal(false)}
-        >
-          <div className="bg-white rounded-2xl p-7 shadow-2xl" style={{ width: 520 }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h2 style={{ fontWeight: 800, color: "#0f172a" }}>Access Management</h2>
-              {pendingCount > 0 && (
-                <span
-                  className="text-xs px-2.5 py-1 rounded-full animate-pulse"
-                  style={{ background: "rgba(251,191,36,0.15)", color: "#d97706" }}
-                >
-                  {pendingCount} pending
-                </span>
-              )}
-            </div>
+          {/* Communities */}
+          <div
+            className="rounded-2xl p-5"
+            style={{ background: "linear-gradient(135deg, #0f172a, #1e3a8a)" }}
+          >
+            <h3 className="text-white mb-1" style={{ fontWeight: 700 }}>
+              Communities
+            </h3>
+            <p className="text-xs text-blue-300 mb-4">
+              Your active learning communities
+            </p>
 
-            <div className="flex gap-2 mb-5">
-              {[
-                { label: "All", count: requests.length },
-                { label: "Pending", count: requests.filter((r) => r.status === "pending").length },
-                { label: "Approved", count: requests.filter((r) => r.status === "approved").length },
-                { label: "Blocked", count: requests.filter((r) => r.status === "blocked").length },
-              ].map((f) => (
-                <span
-                  key={f.label}
-                  className="text-xs px-3 py-1.5 rounded-full"
-                  style={{ background: "#f1f5f9", color: "#64748b" }}
-                >
-                  {f.label} ({f.count})
-                </span>
-              ))}
-            </div>
-
-            <div className="space-y-3 max-h-80 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
-              {requests.map((req) => (
-                <div
-                  key={req.id}
-                  className="flex items-center gap-4 p-4 rounded-xl"
-                  style={{
-                    background: req.status === "pending" ? "#fffbeb" : req.status === "approved" ? "#f0fdf4" : "#fef2f2",
-                    border: `1px solid ${req.status === "pending" ? "#fde68a" : req.status === "approved" ? "#bbf7d0" : "#fecaca"}`,
-                  }}
+            {communities.length > 0 ? (
+              communities.map((c) => (
+                <button
+                  key={c.code}
+                  onClick={() => navigate(`/community/${c.code}`)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1.5 transition-all hover:bg-white/10 text-left"
                 >
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white shrink-0"
-                    style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
+                    style={{ background: c.color, fontWeight: 700 }}
                   >
-                    {req.avatar}
+                    {c.name
+                      .split(" ")
+                      .filter((w: string) => w.length > 0) // remove empty strings
+                      .map((w: string) => w[0].toUpperCase()) // take first letter and uppercase
+                      .join("")
+                      .slice(0, 2)}
                   </div>
-                  <div className="flex-1">
-                    <div className="text-sm" style={{ fontWeight: 700, color: "#0f172a" }}>{req.name}</div>
-                    <div className="text-xs text-gray-400">→ {req.room} · {req.time}</div>
-                  </div>
-                  <div
-                    className="text-xs px-2 py-0.5 rounded-full capitalize"
-                    style={{
-                      background: req.status === "pending" ? "rgba(251,191,36,0.2)" : req.status === "approved" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-                      color: req.status === "pending" ? "#d97706" : req.status === "approved" ? "#16a34a" : "#ef4444",
-                    }}
-                  >
-                    {req.status}
-                  </div>
-                  {req.status === "pending" && (
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => handleRequest(req.id, "approved")}
-                        className="p-1.5 rounded-lg transition-colors hover:bg-green-100"
-                        style={{ color: "#16a34a" }}
-                        title="Approve"
-                      >
-                        <UserCheck className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleRequest(req.id, "blocked")}
-                        className="p-1.5 rounded-lg transition-colors hover:bg-red-100"
-                        style={{ color: "#ef4444" }}
-                        title="Deny"
-                      >
-                        <UserX className="w-4 h-4" />
-                      </button>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="text-white text-xs truncate"
+                      style={{ fontWeight: 600 }}
+                    >
+                      {c.name}
                     </div>
+                    <div className="text-blue-400 text-xs capitalize">
+                      {c.type}
+                    </div>
+                  </div>
+                  {c.unread_count > 0 && (
+                    <span
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-white"
+                      style={{
+                        background: "#7c3aed",
+                        fontSize: "0.6rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {c.unread_count}
+                    </span>
                   )}
-                </div>
-              ))}
-            </div>
+                </button>
+              ))
+            ) : (
+              <p className="text-xs text-blue-200">No communities yet.</p>
+            )}
 
+            {/* View All Communities */}
             <button
-              onClick={() => setShowAccessModal(false)}
-              className="w-full mt-5 py-3 rounded-xl text-white text-sm"
-              style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+              onClick={() => navigate("/community")}
+              className="w-full mt-2 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                color: "rgba(255,255,255,0.6)",
+              }}
             >
-              Done
+              View all communities <ChevronRight className="w-3 h-3" />
             </button>
           </div>
         </div>
-      )}
+      </main>
     </div>
   );
 }

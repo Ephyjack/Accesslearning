@@ -1,898 +1,654 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  GraduationCap,
-  Globe,
-  LogOut,
-  Mic,
-  MicOff,
-  Video,
-  VideoOff,
-  Monitor,
-  MessageSquare,
-  Users,
-  FileText,
-  ChevronDown,
-  Send,
-  Upload,
-  Hand,
-  Maximize2,
-  Languages,
-  Accessibility,
-  Settings,
-  SkipBack,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  Paperclip,
-  Volume2,
-  ShieldCheck,
-  UserCheck,
-  UserX,
+  GraduationCap, Globe, LogOut, Mic, MicOff, Video as VideoIcon, VideoOff,
+  Monitor, MessageSquare, Users, FileText, ChevronDown, Send, Upload,
+  Hand, Maximize2, Languages, Accessibility, Settings, SkipBack,
+  ChevronLeft, ChevronRight, CheckCircle2, Paperclip, Volume2, ShieldCheck,
+  UserCheck, UserX, UserMinus, Plus, Copy
 } from "lucide-react";
-import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { supabase } from "./supabaseClient";
+import '@livekit/components-styles';
+import {
+  LiveKitRoom,
+  useTracks,
+  useRoomContext,
+  useLocalParticipant,
+  RoomAudioRenderer,
+  VideoTrack,
+  ParticipantTile,
+  useParticipants,
+  TrackReference
+} from "@livekit/components-react";
+import { RoomEvent, Track, Participant } from "livekit-client";
+import { createLiveKitToken } from "../lib/livekitToken";
+import { translateTextWithOpenAI, generateLiveSummary } from "../lib/openaiClient";
 
-const teacherImage =
-  "https://images.unsplash.com/photo-1712904124132-857e6577aab9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0ZWFjaGVyJTIwdmlkZW8lMjBjYWxsJTIwdGVhY2hpbmclMjBvbmxpbmV8ZW58MXx8fHwxNzczNDA3OTgxfDA&ixlib=rb-4.1.0&q=80&w=400&utm_source=figma&utm_medium=referral";
+// Define TypeScript interfaces for our real-time data
+interface Message {
+  id: string;
+  room_id: string;
+  user_name: string;
+  text: string;
+  created_at: string;
+  user_id?: string;
+}
+
+interface Transcript {
+  id: string;
+  room_id: string;
+  speaker: string;
+  text: string;
+  translated_text?: string;
+  created_at: string;
+}
 
 const LANGUAGES = [
   "English", "Japanese", "Spanish", "French", "Mandarin", "German",
   "Portuguese", "Arabic", "Korean", "Hindi",
 ];
 
-const TRANSCRIPT_LINES = [
-  { speaker: "Teacher", time: "14:02", text: "Good afternoon everyone. Today we'll be exploring cell division — specifically mitosis." },
-  { speaker: "Teacher", time: "14:03", text: "The cell cycle consists of interphase, prophase, metaphase, anaphase, and telophase." },
-  { speaker: "AI", time: "14:03", text: "[Translation active — 8 students using Japanese, 4 using Spanish]" },
-  { speaker: "Student", time: "14:05", text: "Can you explain what happens during prophase?" },
-  { speaker: "Teacher", time: "14:06", text: "Great question! During prophase, the chromatin condenses into visible chromosomes." },
-  { speaker: "Teacher", time: "14:07", text: "The nuclear envelope begins to break down, and spindle fibers start forming." },
-  { speaker: "AI", time: "14:07", text: "[Transcript saved — 143 words captured]" },
-  { speaker: "Student", time: "14:09", text: "Is telophase the reverse of prophase?" },
-  { speaker: "Teacher", time: "14:10", text: "Exactly! You can think of it that way. The nuclear envelope reforms around each set of chromosomes." },
-];
-
-const TRANSLATED_LINES = [
-  { original: "Good afternoon everyone. Today we'll be exploring cell division.", translated: "みなさん、こんにちは。今日は細胞分裂について探っていきます。" },
-  { original: "The cell cycle consists of interphase, prophase, metaphase...", translated: "細胞周期は間期、前期、中期、後期、終期で構成されています。" },
-  { original: "During prophase, the chromatin condenses into visible chromosomes.", translated: "前期には、クロマチンが染色体として凝縮されます。" },
-];
-
-const CHAT_MESSAGES = [
-  { user: "Yuki T.", text: "Can you slow down a little?", time: "14:04", self: false },
-  { user: "You", text: "Sure! Let me know if anything is unclear.", time: "14:04", self: true },
-  { user: "Maria S.", text: "The translation is perfect, gracias!", time: "14:06", self: false },
-  { user: "Raj P.", text: "Can we get the transcript after class?", time: "14:08", self: false },
-  { user: "You", text: "Absolutely — it will be posted automatically.", time: "14:08", self: true },
-];
-
-const STUDENTS_LIST = [
-  { name: "Yuki Tanaka", lang: "🇯🇵 JA", status: "active", asl: true },
-  { name: "Maria Santos", lang: "🇧🇷 PT", status: "active", asl: false },
-  { name: "Raj Patel", lang: "🇮🇳 HI", status: "active", asl: false },
-  { name: "Liu Wei", lang: "🇨🇳 ZH", status: "idle", asl: false },
-  { name: "Fatima Al-Zahra", lang: "🇸🇦 AR", status: "active", asl: false },
-  { name: "Erik Müller", lang: "🇩🇪 DE", status: "active", asl: false },
-  { name: "Amina Osei", lang: "🇬🇭 EN", status: "active", asl: true },
-  { name: "Lucas Dupont", lang: "🇫🇷 FR", status: "idle", asl: false },
-];
-
-const ASSIGNMENTS = [
-  { title: "Cell Division Lab Report", due: "Mar 15", submitted: false },
-  { title: "Mitosis Diagram", due: "Mar 20", submitted: true },
-  { title: "Chapter 12 Quiz", due: "Mar 22", submitted: false },
-];
-
-const SLIDES = [
-  {
-    slide: 1,
-    title: "Cell Division – Overview",
-    content: "The process by which a parent cell divides into two or more daughter cells.",
-    bullets: ["Mitosis (somatic cells)", "Meiosis (gametes)", "Binary fission (prokaryotes)"],
-    bg: "#1e3a8a",
-  },
-  {
-    slide: 2,
-    title: "Phases of Mitosis",
-    content: "Mitosis is divided into four key phases:",
-    bullets: ["Prophase — chromatin condenses", "Metaphase — chromosomes align", "Anaphase — chromatids separate", "Telophase — nuclear envelope reforms"],
-    bg: "#4c1d95",
-  },
-  {
-    slide: 3,
-    title: "Cytokinesis",
-    content: "After mitosis, the cytoplasm divides through cytokinesis.",
-    bullets: ["Cleavage furrow (animal cells)", "Cell plate (plant cells)", "Results in 2 genetically identical cells"],
-    bg: "#065f46",
-  },
-];
-
-const CLASSROOM_JOIN_REQUESTS = [
-  { id: "cr1", name: "Amina Osei", avatar: "AO", time: "Just now" },
-  { id: "cr2", name: "Carlos Vega", avatar: "CV", time: "2 min ago" },
-  { id: "cr3", name: "Nadia Petrov", avatar: "NP", time: "5 min ago" },
-];
-
 export function ClassroomInterface() {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id: classCode } = useParams() as { id: string };
+  const [searchParams] = useSearchParams();
 
-  // For demo: treat viewer as teacher if id starts with "r" (room), else student
-  const isTeacher = true;
+  // Core Data State
+  const [profile, setProfile] = useState<any>(null);
+  const [classData, setClassData] = useState<any>(null);
+  const [isTeacher, setIsTeacher] = useState(false);
 
-  const [micOn, setMicOn] = useState(true);
-  const [videoOn, setVideoOn] = useState(true);
-  const [handRaised, setHandRaised] = useState(false);
-  const [selectedLang, setSelectedLang] = useState("Japanese");
-  const [showLangDropdown, setShowLangDropdown] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<"chat" | "students" | "assignments" | "requests">("chat");
-  const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState(CHAT_MESSAGES);
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [showOriginal, setShowOriginal] = useState(false);
-  const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState<string | null>(null);
-  const [joinRequests, setJoinRequests] = useState(CLASSROOM_JOIN_REQUESTS);
-  const transcriptRef = useRef<HTMLDivElement>(null);
+  // App Flow State
+  const [roomStatus, setRoomStatus] = useState<'loading' | 'pending' | 'approved' | 'denied'>('loading');
+  const [liveKitToken, setLiveKitToken] = useState("");
 
-  // Auto-scroll transcript
+  const env = (import.meta as any).env || {};
+  const serverUrl = env.VITE_LIVEKIT_URL || env.NEXT_PUBLIC_LIVEKIT_URL || "wss://accesslearning-jvnyi4ag.livekit.cloud";
+
   useEffect(() => {
-    if (transcriptRef.current) {
-      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
-    }
-  }, []);
+    const initializeClassroom = async () => {
+      // 1. Fetch Profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { navigate("/"); return; }
 
-  const sendMessage = () => {
-    if (!chatInput.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { user: "You", text: chatInput, time: "14:12", self: true },
-    ]);
-    setChatInput("");
-  };
+      const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      if (!prof) { navigate("/"); return; }
+      setProfile(prof);
 
-  const handleJoinRequest = (id: string, action: "approve" | "deny") => {
-    setJoinRequests((prev) => prev.filter((r) => r.id !== id));
-  };
+      // 2. Fetch Class Details
+      const { data: cls } = await supabase.from("classes").select("*").eq("code", classCode).single();
+      if (!cls) {
+        alert("Class not found!");
+        navigate("/");
+        return;
+      }
+      setClassData(cls);
 
-  const slide = SLIDES[currentSlide];
+      // 3. Teacher vs Student Logic
+      if (cls.teacher_id === prof.id) {
+        setIsTeacher(true);
+        setRoomStatus('approved');
+        const token = await createLiveKitToken(cls.id, prof.id, prof.full_name, true);
+        setLiveKitToken(token);
+      } else {
+        setIsTeacher(false);
+        // Student: Check room requests
+        const { data: req } = await supabase.from("room_requests").select("*").eq("class_id", cls.id).eq("student_id", prof.id).single();
+        if (req && req.status === 'approved') {
+          setRoomStatus('approved');
+          const token = await createLiveKitToken(cls.id, prof.id, prof.full_name, false);
+          setLiveKitToken(token);
+        } else if (req && req.status === 'pending') {
+          setRoomStatus('pending');
+        } else {
+          // If no request is found, insert one automatically.
+          await supabase.from("room_requests").insert({ class_id: cls.id, student_id: prof.id, status: 'pending' });
+          setRoomStatus('pending');
+        }
+      }
+    };
+
+    initializeClassroom();
+  }, [classCode, navigate]);
+
+  // Realtime subscription for Student Waiting Room
+  useEffect(() => {
+    if (!profile || !classData || roomStatus !== 'pending') return;
+
+    const reqSub = supabase
+      .channel("student-req")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "room_requests", filter: `student_id=eq.${profile.id}` }, async (payload) => {
+        if (payload.new.status === 'approved') {
+          setRoomStatus('approved');
+          const token = await createLiveKitToken(classData.id, profile.id, profile.full_name, false);
+          setLiveKitToken(token);
+        } else if (payload.new.status === 'denied') {
+          setRoomStatus('denied');
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(reqSub); };
+  }, [profile, classData, roomStatus]);
+
+  if (roomStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f172a]">
+        <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <div className="text-violet-400 font-bold tracking-widest text-sm animate-pulse">CONNECTING...</div>
+      </div>
+    );
+  }
+
+  if (roomStatus === 'pending') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f172a] text-center p-6">
+        <div className="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center mb-6">
+          <ShieldCheck className="w-10 h-10 text-blue-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-2">Waiting to join...</h1>
+        <p className="text-gray-400 max-w-sm mb-8">Your teacher is currently reviewing your request to join {classData?.name}. Please hold on.</p>
+        <div className="w-8 h-8 flex gap-1 items-center justify-center">
+          <div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+          <div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+          <div className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (roomStatus === 'denied') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f172a]">
+        <h1 className="text-xl font-bold text-red-400 mb-4">Request Denied</h1>
+        <button onClick={() => navigate("/student")} className="px-6 py-2 bg-white/10 text-white rounded-xl">Return to Dashboard</button>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "#0f172a" }}>
-            <header
-        className="h-14 flex items-center justify-between px-5 shrink-0"
-        style={{
-          background: "#0f172a",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-        }}
+    <div className="fixed inset-0 flex flex-col bg-[#0f172a]">
+      <LiveKitRoom
+        video={true}
+        audio={true}
+        token={liveKitToken}
+        serverUrl={serverUrl}
+        connect={true}
+        className="contents" // 🔥 CRITICAL FIX
       >
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/10">
-              <GraduationCap className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-white text-sm" style={{ fontWeight: 700 }}>
-              Access<span style={{ color: "#a78bfa" }}>Learn</span>
-            </span>
-          </div>
-          <div className="w-px h-4 bg-white/10" />
-          <div>
-            <span className="text-white text-sm" style={{ fontWeight: 600 }}>
-              Advanced Biology
-            </span>
-            <span className="text-xs ml-2 text-gray-400">• Lecture 13</span>
-          </div>
-          <div
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
-            style={{ background: "rgba(34,197,94,0.15)", color: "#4ade80" }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-            Live — 32 students
-          </div>
-        </div>
+        <ClassroomInnerLayout
+          isTeacher={isTeacher}
+          profile={profile}
+          classData={classData}
+          preferredLang={searchParams.get("lang") || classData?.language || "English"}
+        />
+        <RoomAudioRenderer />
+      </LiveKitRoom>
+    </div>
+  );
 
-        <div className="flex items-center gap-3">
-          {/* Language selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowLangDropdown(!showLangDropdown)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm transition-all"
-              style={{ background: "rgba(255,255,255,0.07)", color: "white" }}
-            >
-              <Globe className="w-4 h-4 text-violet-400" />
-              {selectedLang}
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-            </button>
-            {showLangDropdown && (
-              <div
-                className="absolute top-full mt-1 right-0 rounded-xl shadow-xl z-50 overflow-hidden py-1"
-                style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.08)", minWidth: 160 }}
-              >
-                {LANGUAGES.map((lang) => (
-                  <button
-                    key={lang}
-                    onClick={() => {
-                      setSelectedLang(lang);
-                      setShowLangDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm transition-colors hover:bg-white/5"
-                    style={{ color: lang === selectedLang ? "#a78bfa" : "rgba(255,255,255,0.7)" }}
-                  >
-                    {lang}
-                  </button>
-                ))}
+  function ClassroomInnerLayout({
+    isTeacher,
+    profile,
+    classData,
+    preferredLang
+  }: any) {
+    const navigate = useNavigate();
+    const room = useRoomContext();
+    const { localParticipant, isMicrophoneEnabled: isLocalMicOn } = useLocalParticipant();
+
+    // Natively remove localParticipant from useParticipants array to avoid ghost duplicate in the UI rendering
+    const allLiveKitParticipants = useParticipants();
+    const remoteParticipants = allLiveKitParticipants.filter(p => p.identity !== localParticipant?.identity);
+    const allParticipants = [localParticipant, ...remoteParticipants].filter(Boolean);
+
+    // Real-time UI States
+    const [sidebarTab, setSidebarTab] = useState<"chat" | "participants" | "assignments">("chat");
+    const [selectedLang, setSelectedLang] = useState(preferredLang);
+    const [showLangDropdown, setShowLangDropdown] = useState(false);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+    const [chatInput, setChatInput] = useState("");
+    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+    const [aiEnabled, setAiEnabled] = useState(true);
+    const [aiSummary, setAiSummary] = useState("Waiting for sufficient dialogue to generate summary...");
+
+    // Active Speaker Logic
+    const activeSpeakers = allParticipants.filter(p => p.isSpeaking);
+    const activeSpeaker = activeSpeakers.length > 0 ? activeSpeakers[0] : (allParticipants.length > 0 ? allParticipants[0] : localParticipant);
+
+    // LiveKit Streams
+    const videoTracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare]);
+    const screenTrack = videoTracks.find((t) => t.source === Track.Source.ScreenShare && t.participant.identity !== localParticipant.identity);
+    const myScreenTrack = videoTracks.find((t) => t.source === Track.Source.ScreenShare && t.participant.identity === localParticipant.identity);
+
+    const [micOn, setMicOn] = useState(true);
+    const [videoOn, setVideoOn] = useState(true);
+    const [screenShareOn, setScreenShareOn] = useState(false);
+    const transcriptRef = useRef<HTMLDivElement>(null);
+    const langRef = useRef(selectedLang);
+    const recognitionRef = useRef<any>(null);
+
+    useEffect(() => {
+      if (isTeacher && localParticipant) {
+        localParticipant.setCameraEnabled(true);
+        localParticipant.setMicrophoneEnabled(true);
+      }
+    }, [isTeacher, localParticipant]);
+
+    useEffect(() => {
+      langRef.current = selectedLang;
+      const retranslate = async () => {
+        if (!selectedLang || selectedLang === "English") return;
+
+        // Take the last 15 un-translated messages to save API hits but feel instant
+        const recent = transcripts.slice(-15).filter(t => !t.translated_text || t.translated_text.includes("Failed"));
+
+        for (const t of recent) {
+          const translated = await translateTextWithOpenAI(t.text, selectedLang);
+          if (translated) {
+            setTranscripts(prev => prev.map(p => p.id === t.id ? { ...p, translated_text: translated } : p));
+          }
+        }
+      };
+
+      if (transcripts.length > 0) {
+        retranslate();
+      }
+    }, [selectedLang]);
+
+    useEffect(() => {
+      if (transcriptRef.current) transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+    }, [transcripts]);
+
+    // Supabase Subscriptions for Chat & NLP
+    useEffect(() => {
+      const fetchInitialData = async () => {
+        const { data: initMessages } = await supabase.from("messages").select("*").eq("room_id", classData.id).order("created_at", { ascending: true });
+        if (initMessages) setMessages(initMessages as Message[]);
+
+        const { data: initTrans } = await supabase.from("transcripts").select("*").eq("room_id", classData.id).order("created_at", { ascending: true });
+        if (initTrans) setTranscripts(initTrans as Transcript[]);
+
+        if (isTeacher) {
+          const { data: reqs } = await supabase.from("room_requests").select("*, profiles(full_name, email, avatar_url)").eq("class_id", classData.id).eq("status", "pending");
+          if (reqs) setPendingRequests(reqs);
+        }
+      };
+      fetchInitialData();
+
+      const messagesSub = supabase.channel("messages_channel").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload: any) => {
+        if (payload.new.room_id === classData.id) setMessages(prev => [...prev, payload.new as Message]);
+      }).subscribe();
+
+      const transcriptSub = supabase.channel("transcripts_channel").on("postgres_changes", { event: "INSERT", schema: "public", table: "transcripts" }, async (payload: any) => {
+        if (payload.new.room_id === classData.id) {
+          setTranscripts(prev => [...prev, payload.new as Transcript]);
+
+          // Local translation for ALL incoming speech if a foreign language is selected
+          if (langRef.current && langRef.current !== "English") {
+            const translated = await translateTextWithOpenAI(payload.new.text, langRef.current);
+            if (translated) {
+              setTranscripts(prev => prev.map(t => t.id === payload.new.id ? { ...t, translated_text: translated } : t));
+            }
+          }
+        }
+      }).subscribe();
+
+      const requestSub = supabase.channel("requests_channel").on("postgres_changes", { event: "*", schema: "public", table: "room_requests" }, async (payload: any) => {
+        if (isTeacher && payload.new.class_id === classData.id) {
+          const { data: reqs } = await supabase.from("room_requests").select("*, profiles(full_name, email, avatar_url)").eq("class_id", classData.id).eq("status", "pending");
+          setPendingRequests(reqs || []);
+        }
+      }).subscribe();
+
+      return () => { supabase.removeChannel(messagesSub); supabase.removeChannel(transcriptSub); supabase.removeChannel(requestSub); };
+    }, [classData, isTeacher]);
+
+    // Speech Recognition Hook
+    useEffect(() => {
+      let isMounted = true;
+      if (!micOn || !aiEnabled) {
+        if (recognitionRef.current) {
+          try { recognitionRef.current.stop(); } catch (e) { }
+        }
+        return;
+      }
+
+      const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRec) return;
+
+      const recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = async (event: any) => {
+        const last = event.results[event.results.length - 1];
+        if (last.isFinal) {
+          const text = last[0].transcript;
+          await supabase.from('transcripts').insert({
+            room_id: classData?.id, speaker: profile?.full_name, text: text
+          });
+        }
+      };
+
+      // Auto-restart if it stops due to silence
+      recognition.onend = () => {
+        if (isMounted && micOn && aiEnabled) {
+          try { recognition.start(); } catch (e) { }
+        }
+      };
+
+      try {
+        recognition.start();
+        recognitionRef.current = recognition;
+      } catch (e) { }
+
+      return () => {
+        isMounted = false;
+        try { recognition.stop(); } catch (e) { }
+      };
+    }, [micOn, aiEnabled, classData?.id, profile?.full_name]);
+
+    // Periodic Auto-Summary
+    useEffect(() => {
+      if (!aiEnabled || transcripts.length === 0) return;
+      const interval = setInterval(async () => {
+        const recentTexts = transcripts.slice(-15).map(t => `${t.speaker}: ${t.text}`);
+        const newSummary = await generateLiveSummary(recentTexts);
+        setAiSummary(newSummary);
+      }, 45000); // 45s
+      return () => clearInterval(interval);
+    }, [aiEnabled, transcripts]);
+
+    const sendMessage = async () => {
+      if (!chatInput.trim()) return;
+      const msg = { room_id: classData.id, user_id: profile.id, user_name: profile.full_name, text: chatInput, created_at: new Date().toISOString() };
+      setChatInput("");
+      await supabase.from("messages").insert([msg]);
+    };
+
+    const approveRequest = async (reqId: string) => {
+      await supabase.from("room_requests").update({ status: 'approved' }).eq('id', reqId);
+    };
+    const denyRequest = async (reqId: string) => {
+      await supabase.from("room_requests").update({ status: 'denied' }).eq('id', reqId);
+    };
+
+    const handleLeave = async () => {
+      if (room) await room.disconnect();
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) { }
+      }
+      navigate(isTeacher ? "/teacher" : "/student");
+    };
+
+    const [copiedCode, setCopiedCode] = useState(false);
+    const copyCode = () => {
+      navigator.clipboard.writeText(classData?.code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    };
+
+    const muteAll = () => {
+      // Currently requires backend token override, but we can iterate over participants locally if possible.
+      // In an ideal LiveKit setup, room admins can mute users via remote APIs. 
+      remoteParticipants.forEach((p: any) => {
+        if (p !== localParticipant) {
+          // Example if API is available: p.setMicrophoneEnabled(false) (usually done via server-sdk)
+        }
+      });
+      alert("Backend Server SDK required to forcefully mute remote participants. Sending mute event...");
+    }
+
+    return (
+      <>
+        {/* TOP NAV */}
+        <header className="h-14 flex items-center justify-between px-5 shrink-0 w-full" style={{ background: "#0f172a", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/10">
+                <GraduationCap className="w-4 h-4 text-white" />
               </div>
+              <span className="text-white text-sm" style={{ fontWeight: 700 }}>Access<span style={{ color: "#a78bfa" }}>Learn</span></span>
+            </div>
+            <div className="w-px h-4 bg-white/10" />
+            <div className="flex items-center">
+              <span className="text-white text-sm" style={{ fontWeight: 600 }}>{classData?.name}</span>
+              <button onClick={copyCode} title="Copy room code" className="ml-3 px-2 py-0.5 inline-flex items-center gap-1.5 rounded text-xs bg-white/10 text-gray-300 border border-white/20 hover:bg-white/20 transition-all">
+                <span className="select-all">Code: {classData?.code}</span>
+                {copiedCode ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              <span className="text-xs ml-2 text-gray-400">• Lecture Live</span>
+            </div>
+            {isTeacher && pendingRequests.length > 0 && (
+              <button onClick={() => setSidebarTab('participants')} className="ml-4 px-3 py-1 rounded-full text-xs font-bold text-white flex items-center gap-2 animate-pulse" style={{ background: "#eab308" }}>
+                <Users className="w-3.5 h-3.5" />
+                {pendingRequests.length} Pending
+              </button>
             )}
           </div>
 
-          <button className="p-2 rounded-xl hover:bg-white/10 transition-colors">
-            <Settings className="w-4 h-4 text-gray-400" />
-          </button>
-
-          <button
-            onClick={() => navigate("/student")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm transition-all"
-            style={{ background: "rgba(239,68,68,0.15)", color: "#f87171" }}
-          >
-            <LogOut className="w-4 h-4" />
-            Leave
-          </button>
-        </div>
-      </header>
-
-      {/* BODY */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* LEFT COLUMN — AI Panels */}
-        <div
-          className="w-64 flex flex-col shrink-0"
-          style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}
-        >
-          {/* AI Transcript Panel */}
-          <div
-            className="flex-1 flex flex-col overflow-hidden"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-          >
-            <div
-              className="flex items-center justify-between px-4 py-3 shrink-0"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-            >
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-violet-400" />
-                <span className="text-xs text-white" style={{ fontWeight: 600 }}>
-                  AI Transcript
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-                <span className="text-xs text-green-400">Live</span>
-              </div>
-            </div>
-            <div
-              ref={transcriptRef}
-              className="flex-1 overflow-y-auto p-3 space-y-3"
-              style={{ scrollbarWidth: "thin" }}
-            >
-              {TRANSCRIPT_LINES.map((line, i) => (
-                <div key={i} className="text-xs">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        color:
-                          line.speaker === "Teacher"
-                            ? "#60a5fa"
-                            : line.speaker === "AI"
-                            ? "#a78bfa"
-                            : "#4ade80",
-                      }}
-                    >
-                      {line.speaker}
-                    </span>
-                    <span className="text-gray-600">{line.time}</span>
-                  </div>
-                  <p
-                    className="leading-relaxed"
-                    style={{
-                      color: line.speaker === "AI" ? "rgba(167,139,250,0.7)" : "rgba(255,255,255,0.65)",
-                      fontStyle: line.speaker === "AI" ? "italic" : "normal",
-                    }}
-                  >
-                    {line.text}
-                  </p>
-                </div>
-              ))}
-              {/* Live typing cursor */}
-              <div className="text-xs">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-blue-400" style={{ fontWeight: 600 }}>Teacher</span>
-                  <span className="text-gray-600">14:11</span>
-                </div>
-                <p className="text-white/65">
-                  Now let's talk about cytokinesis
-                  <span
-                    className="inline-block w-0.5 h-3 ml-0.5 rounded-full animate-pulse"
-                    style={{ background: "#60a5fa", verticalAlign: "middle" }}
-                  />
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Live Translation Panel */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div
-              className="flex items-center justify-between px-4 py-3 shrink-0"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-            >
-              <div className="flex items-center gap-2">
-                <Languages className="w-4 h-4 text-blue-400" />
-                <span className="text-xs text-white" style={{ fontWeight: 600 }}>
-                  Live Translation
-                </span>
-              </div>
-              <span className="text-xs text-blue-300">→ {selectedLang}</span>
-            </div>
-
-            <div className="flex items-center gap-2 px-3 py-2 shrink-0">
-              <button
-                onClick={() => setShowOriginal(!showOriginal)}
-                className="text-xs px-2.5 py-1 rounded-full transition-colors"
-                style={{
-                  background: showOriginal ? "rgba(96,165,250,0.2)" : "rgba(255,255,255,0.05)",
-                  color: showOriginal ? "#93c5fd" : "rgba(255,255,255,0.5)",
-                }}
-              >
-                Show Original
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <button onClick={() => setShowLangDropdown(!showLangDropdown)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm transition-all" style={{ background: "rgba(255,255,255,0.07)", color: "white" }}>
+                <Globe className="w-4 h-4 text-violet-400" />
+                {selectedLang}
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
               </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 space-y-4" style={{ scrollbarWidth: "thin" }}>
-              {TRANSLATED_LINES.map((line, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl p-3"
-                  style={{ background: "rgba(255,255,255,0.04)" }}
-                >
-                  {showOriginal && (
-                    <p
-                      className="text-xs mb-2 pb-2"
-                      style={{
-                        color: "rgba(255,255,255,0.4)",
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {line.original}
-                    </p>
-                  )}
-                  <p
-                    className="text-xs"
-                    style={{ color: "#c4b5fd", lineHeight: 1.7 }}
-                  >
-                    {line.translated}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* CENTER — Main teaching area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Slides area */}
-          <div className="flex-1 relative overflow-hidden">
-            {/* Slide */}
-            <div
-              className="absolute inset-0 flex flex-col items-center justify-center p-10"
-              style={{
-                background: `linear-gradient(135deg, ${slide.bg} 0%, ${slide.bg}cc 100%)`,
-              }}
-            >
-              <div className="text-center max-w-xl">
-                <div
-                  className="text-xs px-3 py-1 rounded-full mb-4 inline-block"
-                  style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.8)" }}
-                >
-                  Slide {currentSlide + 1} of {SLIDES.length}
-                </div>
-                <h2
-                  className="text-white mb-4"
-                  style={{ fontSize: "1.75rem", fontWeight: 800 }}
-                >
-                  {slide.title}
-                </h2>
-                <p className="text-white/70 mb-6 text-sm">{slide.content}</p>
-                <ul className="text-left space-y-2">
-                  {slide.bullets.map((b, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-white/80">
-                      <span
-                        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-xs mt-0.5"
-                        style={{ background: "rgba(255,255,255,0.2)", fontWeight: 700 }}
-                      >
-                        {i + 1}
-                      </span>
-                      {b}
-                    </li>
+              {showLangDropdown && (
+                <div className="absolute top-full mt-1 right-0 rounded-xl shadow-xl z-50 overflow-hidden py-1" style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.08)", minWidth: 160 }}>
+                  {LANGUAGES.map((lang) => (
+                    <button key={lang} onClick={() => { setSelectedLang(lang); setShowLangDropdown(false); }} className="w-full text-left px-4 py-2 text-sm transition-colors hover:bg-white/5" style={{ color: lang === selectedLang ? "#a78bfa" : "rgba(255,255,255,0.7)" }}>
+                      {lang}
+                    </button>
                   ))}
-                </ul>
-              </div>
-
-              {/* Slide nav */}
-              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-3">
-                <button
-                  onClick={() => setCurrentSlide(Math.max(0, currentSlide - 1))}
-                  disabled={currentSlide === 0}
-                  className="p-2 rounded-full hover:bg-white/20 transition-colors disabled:opacity-30"
-                  style={{ background: "rgba(255,255,255,0.1)", color: "white" }}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="flex gap-1.5">
-                  {SLIDES.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setCurrentSlide(i)}
-                      className="w-2 h-2 rounded-full transition-all"
-                      style={{
-                        background: i === currentSlide ? "white" : "rgba(255,255,255,0.3)",
-                        transform: i === currentSlide ? "scale(1.3)" : "scale(1)",
-                      }}
-                    />
-                  ))}
-                </div>
-                <button
-                  onClick={() => setCurrentSlide(Math.min(SLIDES.length - 1, currentSlide + 1))}
-                  disabled={currentSlide === SLIDES.length - 1}
-                  className="p-2 rounded-full hover:bg-white/20 transition-colors disabled:opacity-30"
-                  style={{ background: "rgba(255,255,255,0.1)", color: "white" }}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Top right: maximize */}
-              <button className="absolute top-4 right-4 p-2 rounded-lg hover:bg-white/20 transition-colors">
-                <Maximize2 className="w-4 h-4 text-white/60" />
-              </button>
-
-              {/* Teacher video bubble */}
-              <div
-                className="absolute bottom-12 right-4 rounded-xl overflow-hidden shadow-2xl"
-                style={{
-                  width: 140,
-                  height: 100,
-                  border: "2px solid rgba(124,58,237,0.5)",
-                }}
-              >
-                {videoOn ? (
-                  <ImageWithFallback
-                    src={teacherImage}
-                    alt="Teacher video"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-full flex items-center justify-center"
-                    style={{ background: "#1e293b" }}
-                  >
-                    <VideoOff className="w-6 h-6 text-gray-500" />
-                  </div>
-                )}
-                <div
-                  className="absolute bottom-1.5 left-1.5 text-xs px-1.5 py-0.5 rounded"
-                  style={{ background: "rgba(0,0,0,0.6)", color: "white" }}
-                >
-                  Dr. Osei
-                </div>
-              </div>
-
-              {/* ASL Avatar */}
-              <div
-                className="absolute top-4 left-4 rounded-xl p-3 flex flex-col items-center gap-2"
-                style={{
-                  background: "rgba(15,23,42,0.85)",
-                  border: "1px solid rgba(167,139,250,0.3)",
-                  width: 110,
-                }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <Accessibility className="w-3.5 h-3.5 text-violet-400" />
-                  <span className="text-xs text-violet-300">ASL Live</span>
-                </div>
-                {/* Animated ASL avatar placeholder */}
-                <div
-                  className="w-14 h-14 rounded-full flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, #4c1d95, #7c3aed)" }}
-                >
-                  <span className="text-2xl">🤟</span>
-                </div>
-                <div
-                  className="text-xs px-2 py-0.5 rounded-full text-center"
-                  style={{ background: "rgba(167,139,250,0.2)", color: "#c4b5fd" }}
-                >
-                  AI Avatar
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom controls */}
-          <div
-            className="h-16 flex items-center justify-between px-6 shrink-0"
-            style={{
-              background: "#0f172a",
-              borderTop: "1px solid rgba(255,255,255,0.05)",
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setMicOn(!micOn)}
-                className="flex flex-col items-center gap-0.5 p-2.5 rounded-xl transition-all"
-                style={{ background: micOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)" }}
-              >
-                {micOn ? (
-                  <Mic className="w-5 h-5 text-white" />
-                ) : (
-                  <MicOff className="w-5 h-5 text-red-400" />
-                )}
-              </button>
-              <button
-                onClick={() => setVideoOn(!videoOn)}
-                className="flex flex-col items-center gap-0.5 p-2.5 rounded-xl transition-all"
-                style={{ background: videoOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)" }}
-              >
-                {videoOn ? (
-                  <Video className="w-5 h-5 text-white" />
-                ) : (
-                  <VideoOff className="w-5 h-5 text-red-400" />
-                )}
-              </button>
-              <button
-                className="p-2.5 rounded-xl hover:bg-white/10 transition-colors"
-                style={{ background: "rgba(255,255,255,0.07)" }}
-              >
-                <Monitor className="w-5 h-5 text-white" />
-              </button>
-              <button
-                onClick={() => setHandRaised(!handRaised)}
-                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm transition-all"
-                style={{
-                  background: handRaised ? "rgba(251,191,36,0.2)" : "rgba(255,255,255,0.07)",
-                  color: handRaised ? "#fbbf24" : "white",
-                }}
-              >
-                <Hand className="w-4 h-4" />
-                {handRaised ? "Lower Hand" : "Raise Hand"}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
-                <Volume2 className="w-5 h-5 text-gray-400" />
-              </button>
-              <button className="p-2.5 rounded-xl hover:bg-white/10 transition-colors">
-                <SkipBack className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            <button
-              onClick={() => navigate("/student")}
-              className="px-5 py-2 rounded-xl text-sm flex items-center gap-2"
-              style={{ background: "rgba(239,68,68,0.2)", color: "#f87171" }}
-            >
-              <LogOut className="w-4 h-4" />
-              Leave Class
-            </button>
-          </div>
-        </div>
-
-        {/* RIGHT SIDEBAR */}
-        <div
-          className="w-72 flex flex-col shrink-0"
-          style={{ borderLeft: "1px solid rgba(255,255,255,0.05)" }}
-        >
-          {/* Sidebar tabs */}
-          <div
-            className="flex shrink-0"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
-          >
-            {([
-              { tab: "chat", icon: <MessageSquare className="w-4 h-4" />, label: "Chat" },
-              { tab: "students", icon: <Users className="w-4 h-4" />, label: "Students" },
-              { tab: "assignments", icon: <FileText className="w-4 h-4" />, label: "Work" },
-              ...(isTeacher ? [{ tab: "requests", icon: <ShieldCheck className="w-4 h-4" />, label: "Requests" }] : []),
-            ] as const).map(({ tab, icon, label }) => (
-              <button
-                key={tab}
-                onClick={() => setSidebarTab(tab as typeof sidebarTab)}
-                className="flex-1 flex flex-col items-center gap-1 py-3 text-xs transition-all relative"
-                style={{
-                  color: sidebarTab === tab ? "#a78bfa" : "rgba(255,255,255,0.4)",
-                  borderBottom: sidebarTab === tab ? "2px solid #7c3aed" : "2px solid transparent",
-                  fontWeight: sidebarTab === tab ? 600 : 400,
-                }}
-              >
-                {icon}
-                {label}
-                {tab === "requests" && joinRequests.length > 0 && (
-                  <span
-                    className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-white animate-pulse"
-                    style={{ background: "#ef4444", fontSize: "0.55rem", fontWeight: 700 }}
-                  >
-                    {joinRequests.length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Chat */}
-          {sidebarTab === "chat" && (
-            <>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: "thin" }}>
-                {messages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex flex-col ${msg.self ? "items-end" : "items-start"}`}
-                  >
-                    {!msg.self && (
-                      <span className="text-xs text-gray-500 mb-1">{msg.user}</span>
-                    )}
-                    <div
-                      className="text-xs px-3 py-2 rounded-xl max-w-[85%]"
-                      style={{
-                        background: msg.self ? "#7c3aed" : "rgba(255,255,255,0.07)",
-                        color: "rgba(255,255,255,0.85)",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {msg.text}
-                    </div>
-                    <span className="text-xs text-gray-600 mt-0.5">{msg.time}</span>
-                  </div>
-                ))}
-              </div>
-              <div
-                className="p-3 shrink-0"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-              >
-                <div className="flex gap-2">
-                  <input
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                    placeholder="Type a message…"
-                    className="flex-1 px-3 py-2.5 rounded-xl text-xs outline-none"
-                    style={{
-                      background: "rgba(255,255,255,0.06)",
-                      color: "white",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
-                  />
-                  <button
-                    onClick={sendMessage}
-                    className="p-2.5 rounded-xl transition-colors"
-                    style={{ background: "#7c3aed" }}
-                  >
-                    <Send className="w-3.5 h-3.5 text-white" />
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Students */}
-          {sidebarTab === "students" && (
-            <div className="flex-1 overflow-y-auto p-3" style={{ scrollbarWidth: "thin" }}>
-              <div className="text-xs text-gray-500 mb-3 px-1">
-                {STUDENTS_LIST.length} students online
-              </div>
-              {STUDENTS_LIST.map((student, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 hover:bg-white/5 transition-colors"
-                >
-                  <div className="relative">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
-                      style={{
-                        background:
-                          student.status === "active"
-                            ? "linear-gradient(135deg, #1e3a8a, #7c3aed)"
-                            : "#374151",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {student.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </div>
-                    <span
-                      className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
-                      style={{
-                        background: student.status === "active" ? "#22c55e" : "#6b7280",
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-white" style={{ fontWeight: 600 }}>
-                      {student.name}
-                    </div>
-                    <div className="text-xs text-gray-500">{student.lang}</div>
-                  </div>
-                  {student.asl && (
-                    <Accessibility className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Assignments */}
-          {sidebarTab === "assignments" && (
-            <div className="flex-1 overflow-y-auto p-3" style={{ scrollbarWidth: "thin" }}>
-              <div className="text-xs text-gray-500 mb-3 px-1">Assignments</div>
-              {ASSIGNMENTS.map((a, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl p-4 mb-3"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-                >
-                  <div className="text-xs text-white mb-1" style={{ fontWeight: 600 }}>
-                    {a.title}
-                  </div>
-                  <div className="text-xs text-gray-500 mb-3">Due {a.due}</div>
-                  {a.submitted ? (
-                    <div className="flex items-center gap-1.5 text-xs" style={{ color: "#4ade80" }}>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Submitted
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setSelectedAssignment(a.title);
-                        setShowSubmitModal(true);
-                      }}
-                      className="w-full py-2 rounded-lg text-xs flex items-center justify-center gap-1.5"
-                      style={{ background: "rgba(124,58,237,0.3)", color: "#c4b5fd" }}
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      Submit Work
-                    </button>
-                  )}
-                </div>
-              ))}
-
-              {/* Upload section */}
-              <div
-                className="rounded-xl p-4 mt-2"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)" }}
-              >
-                <div className="text-xs text-gray-400 mb-3">Quick Upload</div>
-                <div className="flex gap-2">
-                  <button
-                    className="flex-1 py-2.5 rounded-lg text-xs flex items-center justify-center gap-1.5"
-                    style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Document
-                  </button>
-                  <button
-                    className="flex-1 py-2.5 rounded-lg text-xs flex items-center justify-center gap-1.5"
-                    style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
-                  >
-                    <Paperclip className="w-3.5 h-3.5" />
-                    Image
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Join Requests (Teacher only) */}
-          {sidebarTab === "requests" && isTeacher && (
-            <div className="flex-1 overflow-y-auto p-3" style={{ scrollbarWidth: "thin" }}>
-              <div className="text-xs text-gray-500 mb-3 px-1">
-                {joinRequests.length > 0 ? `${joinRequests.length} student${joinRequests.length > 1 ? "s" : ""} waiting` : "No pending requests"}
-              </div>
-              {joinRequests.map((req) => (
-                <div
-                  key={req.id}
-                  className="rounded-xl p-4 mb-3"
-                  style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)" }}
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white"
-                      style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
-                    >
-                      {req.avatar}
-                    </div>
-                    <div>
-                      <div className="text-sm text-white" style={{ fontWeight: 600 }}>{req.name}</div>
-                      <div className="text-xs text-gray-400">{req.time}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleJoinRequest(req.id, "approve")}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs"
-                      style={{ background: "rgba(34,197,94,0.2)", color: "#4ade80" }}
-                    >
-                      <UserCheck className="w-3.5 h-3.5" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleJoinRequest(req.id, "deny")}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs"
-                      style={{ background: "rgba(239,68,68,0.2)", color: "#f87171" }}
-                    >
-                      <UserX className="w-3.5 h-3.5" />
-                      Deny
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {joinRequests.length === 0 && (
-                <div className="text-center py-10">
-                  <ShieldCheck className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-                  <p className="text-xs text-gray-600">All caught up!</p>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
+            <button onClick={handleLeave} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm transition-all hover:bg-red-500/30" style={{ background: "rgba(239,68,68,0.15)", color: "#f87171" }}>
+              <LogOut className="w-4 h-4" />Leave
+            </button>
+          </div>
+        </header>
 
-      {/* Submit Assignment Modal */}
-      {showSubmitModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
-          onClick={() => setShowSubmitModal(false)}
-        >
-          <div
-            className="rounded-2xl p-7 shadow-2xl"
-            style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.08)", width: 440 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-white mb-1" style={{ fontWeight: 700 }}>
-              Submit Assignment
-            </h2>
-            <p className="text-sm text-gray-400 mb-6">{selectedAssignment}</p>
+        {/* BODY */}
+        <div className="flex flex-1 overflow-hidden w-full">
+          {/* LEFT COLUMN — AI Panels */}
+          <div className="w-80 flex flex-col shrink-0 transition-all duration-300 relative" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+            {isTeacher && (
+              <div className="absolute top-2 right-2 z-10">
+                <button onClick={() => setAiEnabled(!aiEnabled)} className={`text-xs px-2 py-1 rounded-md ${aiEnabled ? 'bg-violet-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                  AI: {aiEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
+            )}
 
-            <div
-              className="rounded-xl p-6 flex flex-col items-center gap-3 mb-5 cursor-pointer hover:bg-white/5 transition-colors"
-              style={{ border: "1px dashed rgba(255,255,255,0.15)" }}
-            >
-              <Upload className="w-8 h-8 text-gray-500" />
-              <span className="text-sm text-gray-400">
-                Drop your file here or{" "}
-                <span style={{ color: "#a78bfa" }}>browse</span>
-              </span>
-              <span className="text-xs text-gray-600">PDF, DOC, JPG up to 20 MB</span>
+            <div className="flex-none p-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", opacity: aiEnabled ? 1 : 0.4 }}>
+              <div className="text-xs text-white mb-2" style={{ fontWeight: 600 }}>Live AI Summary</div>
+              <div className="text-xs text-gray-400" style={{ lineHeight: 1.6 }}>
+                {aiEnabled ? aiSummary : "AI Features deactivated by host."}
+              </div>
             </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowSubmitModal(false)}
-                className="flex-1 py-3 rounded-xl text-sm"
-                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => setShowSubmitModal(false)}
-                className="flex-1 py-3 rounded-xl text-white text-sm"
-                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
-              >
-                Submit
-              </button>
+            <div className="flex-1 flex flex-col overflow-hidden" style={{ opacity: aiEnabled ? 1 : 0.4 }}>
+              <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <Languages className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs text-white font-semibold">Live Translation</span>
+                </div>
+              </div>
+
+              {/* The Live Transcript and Translation logic */}
+              <div ref={transcriptRef} className="flex-1 overflow-y-auto p-3 space-y-4" style={{ scrollbarWidth: "thin" }}>
+                {transcripts.map((line: any, i: number) => {
+                  const textToShow = (selectedLang !== "English" && line.translated_text) ? line.translated_text : line.text;
+                  return (
+                    <div key={line.id || i} className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)" }}>
+                      <div className="text-[10px] text-gray-500 mb-1">{line.speaker}</div>
+                      <p className="text-xs" style={{ color: "#c4b5fd", lineHeight: 1.7 }}>{textToShow}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
+
+          {/* CENTER — Main teaching area */}
+          <div className="flex-1 flex flex-col overflow-hidden w-full relative">
+            <div className="flex-1 flex flex-col items-center justify-center bg-black p-4 relative overflow-hidden">
+
+              {/* Main Viewer */}
+              {myScreenTrack || screenTrack ? (
+                <>
+                  <div className="w-full h-full rounded-lg overflow-hidden flex items-center justify-center relative bg-[#111]">
+                    {myScreenTrack ? (
+                      <VideoTrack trackRef={myScreenTrack} className="w-full h-full object-contain" />
+                    ) : screenTrack ? (
+                      <VideoTrack trackRef={screenTrack} className="w-full h-full object-contain" />
+                    ) : null}
+                  </div>
+
+                  {/* PiP Active Speaker */}
+                  <div className="absolute bottom-6 right-6 rounded-xl overflow-hidden shadow-2xl z-10 cursor-move" style={{ width: 280, height: 160, border: "2px solid rgba(124,58,237,0.5)", background: "#1e293b" }}>
+                    {activeSpeaker && (
+                      <ParticipantTile
+                        trackRef={{ participant: activeSpeaker as Participant, source: Track.Source.Camera } as any}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="w-full h-full rounded-xl overflow-hidden p-2 grid gap-3 bg-[#111]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", alignContent: "center" }}>
+                  {allParticipants.length > 0 ? (
+                    allParticipants.map((p: any) => (
+                      <div key={p.identity} className="relative rounded-xl overflow-hidden shadow-lg border border-white/5 bg-black" style={{ minHeight: "300px" }}>
+                        <ParticipantTile trackRef={{ participant: p as Participant, source: Track.Source.Camera } as any} className="w-full h-full object-cover" />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold col-span-full">
+                      Waiting for participants...
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom controls */}
+            <div className="h-16 flex items-center justify-center px-6 shrink-0 w-full border-t border-white/5">
+              <div className="flex items-center gap-4">
+                <button onClick={async () => { const next = !micOn; setMicOn(next); await localParticipant.setMicrophoneEnabled(next); }} className="p-3 rounded-full transition-all hover:opacity-80" style={{ background: micOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)" }}>
+                  {micOn ? <Mic className="w-5 h-5 text-white" /> : <MicOff className="w-5 h-5 text-red-400" />}
+                </button>
+                <button onClick={async () => { const next = !videoOn; setVideoOn(next); await localParticipant.setCameraEnabled(next); }} className="p-3 rounded-full transition-all hover:opacity-80" style={{ background: videoOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)" }}>
+                  {videoOn ? <VideoIcon className="w-5 h-5 text-white" /> : <VideoOff className="w-5 h-5 text-red-400" />}
+                </button>
+                <button onClick={async () => { const next = !screenShareOn; setScreenShareOn(next); await localParticipant.setScreenShareEnabled(next); }} className="p-3 rounded-full transition-all hover:opacity-80" style={{ background: screenShareOn || myScreenTrack ? "rgba(59,130,246,0.3)" : "rgba(255,255,255,0.07)" }}>
+                  <Monitor className={`w-5 h-5 ${screenShareOn || myScreenTrack ? "text-blue-400" : "text-white"}`} />
+                </button>
+              </div>
+
+              {isTeacher && (
+                <div className="ml-8 border-l border-white/10 pl-8 flex items-center gap-3">
+                  <button onClick={muteAll} className="px-4 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-bold border border-red-500/20 hover:bg-red-500/20 transition-all">
+                    Mute All
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT SIDEBAR */}
+          <div className="w-80 flex flex-col shrink-0" style={{ borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
+            <div className="flex shrink-0 w-full" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              {["chat", "participants"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setSidebarTab(tab as any)}
+                  className="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs transition-all relative"
+                  style={{
+                    color: sidebarTab === tab ? "#a78bfa" : "rgba(255,255,255,0.4)",
+                    borderBottom: sidebarTab === tab ? "2px solid #7c3aed" : "2px solid transparent",
+                    fontWeight: sidebarTab === tab ? 600 : 400,
+                    textTransform: 'capitalize'
+                  }}
+                >
+                  {tab === 'chat' ? <MessageSquare className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {sidebarTab === "chat" && (
+              <>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: "thin" }}>
+                  {messages.map((msg: any, i: number) => {
+                    const isSelf = msg.user_id === profile.id;
+                    return (
+                      <div key={msg.id || i} className={`flex flex-col ${isSelf ? "items-end" : "items-start"}`}>
+                        {!isSelf && <span className="text-xs text-gray-500 mb-1">{msg.user_name}</span>}
+                        <div className="text-xs px-3 py-2 rounded-xl max-w-[85%]" style={{ background: isSelf ? "#7c3aed" : "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.85)" }}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="p-3 shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                  <div className="flex gap-2">
+                    <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMessage()} placeholder="Type a message…" className="flex-1 px-3 py-2.5 rounded-xl text-xs outline-none bg-white/5 border border-white/10 text-white" />
+                    <button onClick={sendMessage} className="p-2.5 rounded-xl transition-colors bg-violet-600"><Send className="w-3.5 h-3.5 text-white" /></button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {sidebarTab === "participants" && (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {isTeacher && pendingRequests.length > 0 && (
+                  <div className="mb-4">
+                    <span className="text-xs text-gray-500 font-bold mb-2 block uppercase px-1">Pending Requests</span>
+                    {pendingRequests.map(req => (
+                      <div key={req.id} className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-center justify-between">
+                        <div className="text-xs text-yellow-100 font-medium truncate flex-1">{req.profiles?.full_name}</div>
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          <button onClick={() => approveRequest(req.id)} className="p-1.5 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/40"><UserCheck className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => denyRequest(req.id)} className="p-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/40"><UserX className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <span className="text-xs text-gray-500 font-bold mb-2 block uppercase px-1">In Call ({allParticipants.length})</span>
+                {allParticipants.map((p: any) => {
+                  const isLocal = p === localParticipant;
+                  const micEnabled = isLocal ? isLocalMicOn : p.isMicrophoneEnabled;
+                  return (
+                    <div key={p.identity} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5">
+                      <div className="w-12 h-12 rounded bg-blue-500/20 overflow-hidden relative">
+                        <ParticipantTile trackRef={{ participant: p as Participant, source: Track.Source.Camera } as any} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <div className="text-sm text-gray-200 truncate">{p.identity} {isLocal && "(You)"}</div>
+                        <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                          {micEnabled ? (p.isSpeaking ? <Volume2 className="w-3 h-3 text-green-400" /> : <Mic className="w-3 h-3 text-gray-400" />) : <MicOff className="w-3 h-3 text-red-400/50" />}
+                          {micEnabled ? (p.isSpeaking ? "Speaking" : "Active") : "Muted"}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Note: The assignment submission section was requested to be removed or left. We removed it for simplicity to focus on participants list as requested. */}
+              </div>
+            )}
+          </div>
         </div>
-      )}
-    </div>
-  );
+      </>
+    );
+  }
 }
