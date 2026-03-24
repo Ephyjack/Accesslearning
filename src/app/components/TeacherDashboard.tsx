@@ -28,6 +28,7 @@ import {
   UserX,
   Hash,
   Lock,
+  Trash2,
   Menu, X
 } from "lucide-react";
 import {
@@ -63,6 +64,9 @@ export function TeacherDashboard() {
 
   const [newClassName, setNewClassName] = useState("");
   const [newClassLang, setNewClassLang] = useState("English");
+  const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomLang, setNewRoomLang] = useState("English");
+  const [newRoomPrivate, setNewRoomPrivate] = useState(false);
 
   const handleCreateClass = async () => {
     if (!newClassName.trim() || !profile) return;
@@ -100,6 +104,38 @@ export function TeacherDashboard() {
       setClasses(prev => prev.filter(c => c.id !== id));
     } else {
       alert("Failed to delete class.");
+    }
+  };
+
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim() || !profile) return;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { data, error } = await supabase.from("rooms").insert({
+      name: newRoomName,
+      code,
+      language: newRoomLang,
+      teacher_id: profile.id,
+      is_private: newRoomPrivate,
+      status: "offline",
+    }).select().single();
+    if (error) {
+      alert("Failed to create room: " + error.message);
+      return;
+    }
+    if (data) setRooms(prev => [data, ...prev]);
+    setNewRoomName("");
+    setNewRoomLang("English");
+    setNewRoomPrivate(false);
+    setShowCreateRoomModal(false);
+  };
+
+  const handleDeleteRoom = async (id: string) => {
+    if (!window.confirm("Delete this room?")) return;
+    const { error } = await supabase.from("rooms").delete().eq("id", id);
+    if (!error) {
+      setRooms(prev => prev.filter(r => r.id !== id));
+    } else {
+      alert("Failed to delete room.");
     }
   };
 
@@ -891,6 +927,7 @@ export function TeacherDashboard() {
                       </button>
                       <button
                         className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-red-50 transition-colors"
+                        onClick={() => handleDeleteRoom(room.id)}
                         style={{
                           border: "1px solid #fecaca",
                           color: "#ef4444",
@@ -1117,6 +1154,72 @@ export function TeacherDashboard() {
                     style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
                   >
                     Create & Open
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Create Room Modal */}
+          {showCreateRoomModal && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center"
+              style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+              onClick={() => setShowCreateRoomModal(false)}
+            >
+              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+                  <Video className="w-6 h-6" />
+                </div>
+                <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create Online Room</h2>
+                <p className="text-sm text-gray-400 mb-6">A persistent room where students can request to join.</p>
+                <div className="mb-4">
+                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Room Name</label>
+                  <input
+                    value={newRoomName}
+                    onChange={(e) => setNewRoomName(e.target.value)}
+                    placeholder="e.g. Biology Study Room"
+                    className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
+                    style={{ borderColor: "#e2e8f0" }}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Language</label>
+                  <select value={newRoomLang} onChange={(e) => setNewRoomLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                    <option value="English">English</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="Mandarin">Mandarin</option>
+                    <option value="Japanese">Japanese</option>
+                  </select>
+                </div>
+                <div className="mb-6 flex items-center gap-3">
+                  <button
+                    onClick={() => setNewRoomPrivate(!newRoomPrivate)}
+                    className="w-10 h-6 rounded-full transition-colors relative shrink-0"
+                    style={{ background: newRoomPrivate ? "#7c3aed" : "#e2e8f0" }}
+                  >
+                    <span
+                      className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                      style={{ left: newRoomPrivate ? "calc(100% - 1.35rem)" : "0.125rem" }}
+                    />
+                  </button>
+                  <span className="text-sm text-gray-600">Private room (students need approval to join)</span>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCreateRoomModal(false)}
+                    className="flex-1 py-3 rounded-xl border text-sm"
+                    style={{ borderColor: "#e2e8f0", color: "#64748b" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateRoom}
+                    className="flex-1 py-3 rounded-xl text-white text-sm"
+                    style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+                  >
+                    Create Room
                   </button>
                 </div>
               </div>

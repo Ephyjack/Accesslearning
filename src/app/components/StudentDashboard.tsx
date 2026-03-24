@@ -5,7 +5,7 @@ import {
   GraduationCap, BookOpen, Clock, Video, FileText, CheckCircle2,
   Bell, Search, Plus, Play, Users, Calendar, Layers, LogOut,
   Settings, Languages, Headphones, Upload, Radio, Circle, Hash,
-  Menu, X
+  Lock, Menu, X
 } from "lucide-react";
 
 export function StudentDashboard() {
@@ -28,6 +28,7 @@ export function StudentDashboard() {
   const [communities, setCommunities] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<Record<string, string>>({});
   const [showRequestModal, setShowRequestModal] = useState<any>(null);
+  const [showJoinRoomModal, setShowJoinRoomModal] = useState<any>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -72,26 +73,53 @@ export function StudentDashboard() {
       if (myComms) {
         setCommunities(myComms.map((m: any) => m.communities).filter(Boolean));
       }
+
+      // Fetch persistent rooms available to student
+      const { data: roomsData } = await supabase
+        .from("rooms")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (roomsData) setRooms(roomsData);
+
+      // Fetch join requests for private rooms
+      const { data: roomReqs } = await supabase
+        .from("room_requests")
+        .select("class_id, status")
+        .eq("student_id", userProfile.id);
+      if (roomReqs) {
+        const rs: Record<string, string> = { ...roomStatuses };
+        roomReqs.forEach(r => { if (r.class_id) rs[r.class_id] = r.status; });
+        setRoomStatuses(prev => ({ ...prev, ...rs }));
+      }
     };
     fetchUser();
   }, [navigate]);
 
   const handleRoomAction = (room: any) => {
+    if (!room.is_private) {
+      navigate(`/classroom/${room.id}`);
+      return;
+    }
     const status = roomStatuses[room.id];
     if (status === "approved") {
       navigate(`/classroom/${room.id}`);
     } else if (status === "pending") {
-      // already pending
+      // already pending - do nothing
     } else {
-      setShowRequestModal(room);
+      setShowJoinRoomModal(room);
     }
   };
 
-  const sendRequest = () => {
-    if (showRequestModal) {
-      setRoomStatuses((prev) => ({ ...prev, [showRequestModal.id]: "pending" }));
+  const sendRoomRequest = async () => {
+    if (showJoinRoomModal && profile) {
+      await supabase.from("room_requests").insert({
+        class_id: showJoinRoomModal.id,
+        student_id: profile.id,
+        status: "pending",
+      });
+      setRoomStatuses(prev => ({ ...prev, [showJoinRoomModal.id]: "pending" }));
     }
-    setShowRequestModal(null);
+    setShowJoinRoomModal(null);
   };
 
   const handleLogout = async () => {
@@ -342,6 +370,42 @@ export function StudentDashboard() {
           </div>
         )}
 
+        {activeTab === "rooms" && ROOMS.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
+            {ROOMS.map((room) => (
+              <div key={room.id} className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow" style={{ border: "1px solid #f1f5f9" }}>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+                    <Radio className="w-5 h-5" />
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${room.status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {room.status === 'live' ? '● Live' : 'Offline'}
+                  </span>
+                </div>
+                <h3 className="mb-0.5" style={{ fontWeight: 700, color: "#0f172a" }}>{room.name}</h3>
+                <p className="text-xs text-gray-400 mb-1">{room.language} Room</p>
+                {room.is_private && (
+                  <p className="text-xs mb-3" style={{ color: "#7c3aed" }}>🔒 Private — Requires Approval</p>
+                )}
+                {roomStatuses[room.id] === "pending" ? (
+                  <button disabled className="w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2" style={{ background: "rgba(251,191,36,0.15)", color: "#d97706" }}>
+                    <Circle className="w-4 h-4" /> Pending Approval
+                  </button>
+                ) : roomStatuses[room.id] === "approved" ? (
+                  <button onClick={() => navigate(`/classroom/${room.id}`)} className="w-full py-2.5 rounded-xl text-white text-sm flex items-center justify-center gap-2 hover:opacity-90" style={{ background: "#16a34a" }}>
+                    <Play className="w-4 h-4" /> Enter Room
+                  </button>
+                ) : (
+                  <button onClick={() => handleRoomAction(room)} className="w-full py-2.5 rounded-xl text-white text-sm flex items-center justify-center gap-2 hover:opacity-90" style={{ background: room.is_private ? "#7c3aed" : "#1e3a8a" }}>
+                    {room.is_private ? <Lock className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {room.is_private ? "Request to Join" : "Join Room"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {activeTab === "assignments" && assignments.length === 0 && (
           <div className="text-center py-16 px-4 rounded-2xl border-2 border-dashed" style={{ borderColor: "#cbd5e1", background: "transparent" }}>
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -421,23 +485,23 @@ export function StudentDashboard() {
         </div>
       )}
 
-      {/* Request to Join Room Modal */}
-      {showRequestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowRequestModal(null)}>
+      {/* Private Room Join Request Modal */}
+      {showJoinRoomModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowJoinRoomModal(null)}>
           <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
               <Radio className="w-7 h-7" />
             </div>
             <h2 className="mb-1" style={{ fontWeight: 800, color: "#0f172a" }}>Request to Join</h2>
-            <p className="text-sm" style={{ color: "#7c3aed", fontWeight: 600 }}>{showRequestModal.name}</p>
+            <p className="text-sm" style={{ color: "#7c3aed", fontWeight: 600 }}>{showJoinRoomModal.name}</p>
             <p className="text-sm text-gray-400 mt-1 mb-5">Your request will be sent to the host. You'll be admitted once approved.</p>
             <div className="flex items-center gap-3 rounded-xl p-3 mb-5" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
               <Circle className="w-4 h-4 text-yellow-500" />
               <span className="text-xs text-yellow-700">Status will show as: Pending Approval</span>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setShowRequestModal(null)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
-              <button onClick={sendRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Send Request</button>
+              <button onClick={() => setShowJoinRoomModal(null)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
+              <button onClick={sendRoomRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Send Request</button>
             </div>
           </div>
         </div>

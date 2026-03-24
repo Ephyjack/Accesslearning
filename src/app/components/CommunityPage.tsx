@@ -117,6 +117,7 @@ export function CommunityPage() {
   const [exploreSearch, setExploreSearch] = useState("");
   const [exploreResults, setExploreResults] = useState<Community[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
 
   const [showJoinRoomModal, setShowJoinRoomModal] = useState<Room | null>(null);
   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
@@ -128,6 +129,9 @@ export function CommunityPage() {
   const [newCommName, setNewCommName] = useState("");
   const [newCommType, setNewCommType] = useState<"public" | "private" | "school">("public");
   const [joinCode, setJoinCode] = useState("");
+  const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomLang, setNewRoomLang] = useState("English");
+  const [newRoomPrivate, setNewRoomPrivate] = useState(false);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -353,10 +357,43 @@ export function CommunityPage() {
   };
 
   const deleteCommunity = async () => {
-    if (window.confirm("Are you sure you want to permanently delete this community?")) {
+    if (window.confirm("Are you sure you want to permanently delete this community? This cannot be undone.")) {
       await supabase.from("communities").delete().eq("id", activeCommunity);
       // State is handled by realtime subscription
     }
+  };
+
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim() || !sessionUser) return;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { data, error } = await supabase.from("rooms").insert({
+      name: newRoomName,
+      code,
+      language: newRoomLang,
+      teacher_id: sessionUser.id,
+      community_id: activeCommunity,
+      is_private: newRoomPrivate,
+      status: "offline",
+    }).select().single();
+    if (!error && data) {
+      const newRoom: Room = { id: data.id, name: data.name, teacher: data.teacher_id, participants: 0, live: false };
+      setChannels(prev => ({ ...prev, rooms: [...prev.rooms, newRoom] }));
+    } else if (error) {
+      // Fallback: also insert into classes table for community rooms
+      await supabase.from("classes").insert({
+        name: newRoomName,
+        code,
+        language: newRoomLang,
+        teacher_id: sessionUser.id,
+        community_id: activeCommunity,
+        status: "active",
+        students_count: 0,
+      });
+    }
+    setNewRoomName("");
+    setNewRoomLang("English");
+    setNewRoomPrivate(false);
+    setShowCreateRoomModal(false);
   };
 
   const approveRequest = (idx: number) => {
@@ -506,7 +543,7 @@ export function CommunityPage() {
         >
           {/* Community header */}
           <div
-            className="px-4 py-4 flex items-center justify-between group transition-colors relative"
+            className="px-4 py-4 flex items-center justify-between transition-colors relative"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
           >
             <div className="flex items-center gap-2 min-w-0">
@@ -530,7 +567,12 @@ export function CommunityPage() {
             </div>
             <div className="flex items-center gap-1">
               {community.created_by === sessionUser?.id && community.id !== "0" && (
-                <button onClick={deleteCommunity} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                <button
+                  onClick={deleteCommunity}
+                  className="p-1 rounded hover:bg-red-500/20 transition-colors"
+                  title="Delete Community"
+                  style={{ color: "#f87171" }}
+                >
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
@@ -622,7 +664,9 @@ export function CommunityPage() {
                   Rooms
                 </span>
                 {viewerRole === "teacher" && (
-                  <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
+                  <button onClick={() => setShowCreateRoomModal(true)} className="rounded hover:bg-white/10 p-0.5 transition-colors" title="Create Room">
+                    <Plus className="w-3.5 h-3.5 text-gray-400 hover:text-gray-200" />
+                  </button>
                 )}
               </div>
               {channels.rooms.map((room) => (
@@ -661,33 +705,38 @@ export function CommunityPage() {
 
           {/* User controls */}
           <div
-            className="px-2 py-2 flex items-center gap-2"
+            className="px-2 py-2"
             style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "#0f1929" }}
           >
-            <div className="relative shrink-0">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white overflow-hidden"
-                style={{ background: profile?.avatar_url ? "transparent" : "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
-              >
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  (profile?.full_name || sessionUser?.email || "U").substring(0, 2).toUpperCase()
-                )}
+            {/* Top row: avatar + name/role */}
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="relative shrink-0">
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs text-white overflow-hidden"
+                  style={{ background: profile?.avatar_url ? "transparent" : "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
+                >
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    (profile?.full_name || sessionUser?.email || "U").substring(0, 2).toUpperCase()
+                  )}
+                </div>
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-gray-900"
+                  style={{ background: "#22c55e" }}
+                />
               </div>
-              <span
-                className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
-                style={{ background: "#22c55e" }}
-              />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>
+                  {profile?.full_name || sessionUser?.email || "User"}
+                </div>
+                <div className="text-xs capitalize" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  {profile?.role || viewerRole}
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>
-              {profile?.full_name || sessionUser?.email || "User"}
-            </div>
-
-            <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-              #{profile?.role || viewerRole}
-            </div>
-            <div className="flex gap-0.5">
+            {/* Bottom row: controls */}
+            <div className="flex gap-0.5 justify-end">
               <button onClick={() => setMicOn(!micOn)} className="p-1.5 rounded hover:bg-white/10 transition-colors">
                 {micOn ? <Mic className="w-3.5 h-3.5 text-gray-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
               </button>
@@ -1120,6 +1169,81 @@ export function CommunityPage() {
                 style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
               >
                 Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Online Room Modal (teacher only) */}
+      {showCreateRoomModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowCreateRoomModal(false)}
+        >
+          <div
+            className="rounded-2xl p-7 shadow-2xl w-full max-w-sm mx-4"
+            style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.2)", color: "#60a5fa" }}>
+              <Video className="w-6 h-6" />
+            </div>
+            <h2 className="text-white mb-1" style={{ fontWeight: 800 }}>Create Online Room</h2>
+            <p className="text-sm text-gray-400 mb-5">Students will request to join and you can admit them.</p>
+            <div className="mb-4">
+              <label className="block text-xs text-gray-400 mb-1.5" style={{ fontWeight: 600 }}>Room Name</label>
+              <input
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                placeholder="e.g. Biology Study Room"
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ background: "rgba(255,255,255,0.07)", color: "white", border: "1px solid rgba(255,255,255,0.1)" }}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs text-gray-400 mb-1.5" style={{ fontWeight: 600 }}>Language</label>
+              <select
+                value={newRoomLang}
+                onChange={(e) => setNewRoomLang(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ background: "rgba(255,255,255,0.07)", color: "white", border: "1px solid rgba(255,255,255,0.1)" }}
+              >
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="Mandarin">Mandarin</option>
+                <option value="Japanese">Japanese</option>
+              </select>
+            </div>
+            <div className="mb-5 flex items-center gap-3">
+              <button
+                onClick={() => setNewRoomPrivate(!newRoomPrivate)}
+                className="w-10 h-6 rounded-full transition-colors relative shrink-0"
+                style={{ background: newRoomPrivate ? "#7c3aed" : "rgba(255,255,255,0.15)" }}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                  style={{ left: newRoomPrivate ? "calc(100% - 1.35rem)" : "0.125rem" }}
+                />
+              </button>
+              <span className="text-sm text-gray-300">Private room (students need approval)</span>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCreateRoomModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm"
+                style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateRoom}
+                className="flex-1 py-2.5 rounded-xl text-white text-sm"
+                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+              >
+                Create Room
               </button>
             </div>
           </div>
