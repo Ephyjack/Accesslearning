@@ -65,10 +65,12 @@ export interface Member {
   role: Role;
   status: string;
   avatar: string;
+  avatarUrl?: string;
 }
 
 export interface Message {
   id: string;
+  userId?: string;
   user: string;
   role: Role;
   avatar: string;
@@ -95,6 +97,7 @@ export function CommunityPage() {
 
   const [viewerRole, setViewerRole] = useState<Role>("teacher");
   const [sessionUser, setSessionUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
 
   const [communities, setCommunities] = useState<Community[]>([]);
   const [activeCommunity, setActiveCommunity] = useState(id || "");
@@ -133,7 +136,10 @@ export function CommunityPage() {
       if (user) {
         setSessionUser(user);
         const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-        if (profile) setViewerRole(profile.role as Role);
+        if (profile) {
+          setProfile(profile);
+          setViewerRole(profile.role as Role);
+        }
 
         const { data: myComms } = await supabase.from("community_members")
           .select("community_id, communities(*)")
@@ -221,6 +227,7 @@ export function CommunityPage() {
       if (data) {
         setMessages(data.map(m => ({
           id: m.id,
+          userId: m.user_id,
           user: m.user_name || "User",
           role: "student",
           time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -236,7 +243,7 @@ export function CommunityPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${activeChannel}` }, (payload) => {
         const m = payload.new;
         setMessages(prev => [...prev, {
-          id: m.id, user: m.user_name || "User", role: "student",
+          id: m.id, userId: m.user_id, user: m.user_name || "User", role: "student",
           time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           text: m.text, avatar: m.user_name?.substring(0, 2).toUpperCase() || "US", color: "#7c3aed"
         }]);
@@ -257,7 +264,10 @@ export function CommunityPage() {
     await supabase.from("messages").insert({
       room_id: activeChannel,
       user_id: sessionUser?.id || null,
-      user_name: sessionUser?.user_metadata?.full_name || "Sofia Mendez",
+      user_name:
+        sessionUser?.user_metadata?.full_name ||
+        sessionUser?.email ||
+        "Anonymous",
       text: text
     });
   };
@@ -470,10 +480,14 @@ export function CommunityPage() {
           {/* User avatar */}
           <div className="relative">
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-xs text-white"
-              style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-xs text-white overflow-hidden"
+              style={{ background: profile?.avatar_url ? "transparent" : "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
             >
-              SM
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                (profile?.full_name || sessionUser?.email || "U").substring(0, 2).toUpperCase()
+              )}
             </div>
             <span
               className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2"
@@ -650,21 +664,28 @@ export function CommunityPage() {
             className="px-2 py-2 flex items-center gap-2"
             style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "#0f1929" }}
           >
-            <div className="relative">
+            <div className="relative shrink-0">
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
-                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white overflow-hidden"
+                style={{ background: profile?.avatar_url ? "transparent" : "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
               >
-                SM
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  (profile?.full_name || sessionUser?.email || "U").substring(0, 2).toUpperCase()
+                )}
               </div>
               <span
                 className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
                 style={{ background: "#22c55e" }}
               />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>Sofia Mendez</div>
-              <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>#teacher</div>
+            <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>
+              {profile?.full_name || sessionUser?.email || "User"}
+            </div>
+
+            <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+              #{profile?.role || viewerRole}
             </div>
             <div className="flex gap-0.5">
               <button onClick={() => setMicOn(!micOn)} className="p-1.5 rounded hover:bg-white/10 transition-colors">
@@ -736,20 +757,29 @@ export function CommunityPage() {
           {/* Messages */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5" style={{ scrollbarWidth: "thin" }}>
-              {messages.map((msg, i) => {
-                const badge = roleBadge(msg.role);
+              {messages.map((msg: any, i) => {
+                const msgMember = members.find(m => m.id === msg.userId);
+                const role = msgMember?.role || msg.role || "student";
+                const badge = roleBadge(role);
+                const avatarStr = msgMember?.avatar || msg.avatar;
+                const avatarUrl = msgMember?.avatarUrl;
+
                 return (
                   <div key={i} className="flex gap-3 group">
                     <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white shrink-0 mt-0.5"
-                      style={{ background: msg.color, fontWeight: 700 }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white shrink-0 mt-0.5 overflow-hidden bg-gray-800"
+                      style={{ background: avatarUrl ? "transparent" : msg.color, fontWeight: 700 }}
                     >
-                      {msg.avatar}
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        avatarStr
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <span className="text-sm text-white" style={{ fontWeight: 700 }}>
-                          {msg.user}
+                          {msgMember?.name || msg.user}
                         </span>
                         <span
                           className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full"
