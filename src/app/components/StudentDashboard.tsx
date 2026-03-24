@@ -5,10 +5,12 @@ import {
   GraduationCap, BookOpen, Clock, Video, FileText, CheckCircle2,
   Bell, Search, Plus, Play, Users, Calendar, Layers, LogOut,
   Settings, Languages, Headphones, Upload, Radio, Circle, Hash,
+  Menu, X
 } from "lucide-react";
 
 export function StudentDashboard() {
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "assignments" | "recordings" | "communities">("classes");
@@ -140,18 +142,34 @@ export function StudentDashboard() {
 
   return (
     <div className="min-h-screen flex" style={{ background: "#f8faff" }}>
+      {/* Mobile Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-20 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 flex flex-col fixed h-full z-20" style={{ background: "linear-gradient(180deg, #0f172a 0%, #1a2d6e 100%)", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
-        <div className="p-6 mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/10">
-              <GraduationCap className="w-5 h-5 text-white" />
+      <aside
+        className={`w-64 flex flex-col fixed h-full z-30 transition-transform duration-300 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ background: "linear-gradient(180deg, #0f172a 0%, #1a2d6e 100%)", borderRight: "1px solid rgba(255,255,255,0.05)" }}
+      >
+        <div className="p-6 mb-2 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/10">
+                <GraduationCap className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-white" style={{ fontWeight: 700, fontSize: "1.05rem" }}>
+                Access<span style={{ color: "#a78bfa" }}>Learn</span>
+              </span>
             </div>
-            <span className="text-white" style={{ fontWeight: 700, fontSize: "1.05rem" }}>
-              Access<span style={{ color: "#a78bfa" }}>Learn</span>
-            </span>
+            <button className="lg:hidden text-white hover:bg-white/10 p-1 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <div className="mt-3 text-xs px-2 py-1 rounded-full inline-block" style={{ background: "rgba(37,99,235,0.3)", color: "#93c5fd" }}>
+          <div className="text-xs px-2 py-1 rounded-full inline-block w-fit" style={{ background: "rgba(37,99,235,0.3)", color: "#93c5fd" }}>
             Student Account
           </div>
         </div>
@@ -207,35 +225,41 @@ export function StudentDashboard() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 ml-64 p-8">
+      <main className="flex-1 lg:ml-64 p-4 lg:p-8 w-full overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a" }}>
-              Hello, {firstName} 👋
-            </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              You have {enrolledClasses.length} class{enrolledClasses.length !== 1 ? 'es' : ''} today and {assignments.length} pending assignment{assignments.length !== 1 ? 's' : ''}
-            </p>
-          </div>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8 mt-2 lg:mt-0">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input placeholder="Search…" className="pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0", background: "white", minWidth: 200 }} />
+            <button className="lg:hidden p-2 -ml-2 rounded-xl bg-white border shadow-sm shrink-0" style={{ borderColor: "#e2e8f0" }} onClick={() => setMobileMenuOpen(true)}>
+              <Menu className="w-5 h-5 text-gray-700" />
+            </button>
+            <div>
+              <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a" }}>
+                Hello, {firstName} 👋
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                You have {enrolledClasses.length} class{enrolledClasses.length !== 1 ? 'es' : ''} today and {assignments.length} pending assignment{assignments.length !== 1 ? 's' : ''}
+              </p>
             </div>
-            <button className="relative p-2.5 rounded-xl bg-white border" style={{ borderColor: "#e2e8f0" }}>
+          </div>
+          <div className="flex items-center gap-2 lg:gap-3 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
+            <div className="relative shrink-0 flex-1 lg:flex-none">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input placeholder="Search…" className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0", background: "white", minWidth: 140, maxWidth: 200 }} />
+            </div>
+            <button className="relative p-2.5 rounded-xl bg-white border shrink-0" style={{ borderColor: "#e2e8f0" }}>
               <Bell className="w-5 h-5 text-gray-500" />
               {assignments.length > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />}
             </button>
-            <button onClick={() => setShowJoinModal(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>
+            <button onClick={() => setShowJoinModal(true)} className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>
               <Plus className="w-4 h-4" />
-              Join Class
+              <span className="hidden sm:inline">Join Class</span>
+              <span className="sm:hidden">Join</span>
             </button>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-5 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 mb-6 lg:mb-8">
           {[
             { icon: <BookOpen className="w-5 h-5" />, label: "Enrolled Classes", value: enrolledClasses.length.toString(), color: "#1e3a8a" },
             { icon: <FileText className="w-5 h-5" />, label: "Pending Assignments", value: enrolledClasses.length === 0 ? "0" : assignments.length.toString(), color: "#dc2626" },
@@ -251,12 +275,12 @@ export function StudentDashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 rounded-xl mb-6 w-fit" style={{ background: "#f1f5f9" }}>
+        <div className="flex gap-1 p-1 rounded-xl mb-6 w-full max-w-full overflow-x-auto" style={{ background: "#f1f5f9", scrollbarWidth: "none" }}>
           {(["classes", "rooms", "assignments", "recordings", "communities"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className="px-4 py-2 rounded-lg text-sm capitalize transition-all"
+              className="px-4 py-2 rounded-lg text-sm capitalize transition-all shrink-0"
               style={{
                 background: activeTab === tab ? "white" : "transparent",
                 color: activeTab === tab ? "#0f172a" : "#64748b",
@@ -271,7 +295,7 @@ export function StudentDashboard() {
 
         {/* Tab Content */}
         {activeTab === "classes" && (
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
             {enrolledClasses.length === 0 ? (
               <div className="col-span-full rounded-2xl p-12 border-2 border-dashed flex flex-col items-center justify-center gap-4 hover:bg-gray-50 transition-colors cursor-pointer" style={{ borderColor: "#cbd5e1" }} onClick={() => setShowJoinModal(true)}>
                 <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
@@ -347,7 +371,7 @@ export function StudentDashboard() {
         )}
 
         {activeTab === "communities" && communities.length > 0 && (
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
             {communities.map((comm) => (
               <div key={comm.id} className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow" style={{ border: "1px solid #f1f5f9" }}>
                 <div className="flex items-start justify-between mb-4">

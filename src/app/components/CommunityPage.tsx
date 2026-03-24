@@ -29,6 +29,7 @@ import {
   UserPlus,
   Radio,
   Trash2,
+  Menu, X
 } from "lucide-react";
 
 type Role = "teacher" | "student" | "admin";
@@ -117,6 +118,8 @@ export function CommunityPage() {
   const [showJoinRoomModal, setShowJoinRoomModal] = useState<Room | null>(null);
   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
   const [pendingRooms, setPendingRooms] = useState<string[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
 
   // Form states
   const [newCommName, setNewCommName] = useState("");
@@ -372,310 +375,327 @@ export function CommunityPage() {
 
   return (
     <div className="h-screen flex overflow-hidden" style={{ background: "#0f172a" }}>
-
-      {/* ── FAR LEFT: Community icon rail (Discord-style) ── */}
-      <div
-        className="w-16 flex flex-col items-center py-4 gap-3 shrink-0"
-        style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}
-      >
-        {/* Home */}
-        <button
-          onClick={() => navigate("/teacher")}
-          className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all"
-          style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
-          title="Dashboard"
-        >
-          <GraduationCap className="w-5 h-5 text-white" />
-        </button>
-
-        <div className="w-8 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />
-
-        {/* Communities */}
-        {communities.map((c) => (
-          <div key={c.id} className="relative">
-            {c.unread > 0 && (
-              <span
-                className="absolute -right-1 -top-1 w-4 h-4 rounded-full flex items-center justify-center text-white z-10"
-                style={{ background: "#ef4444", fontSize: "0.6rem", fontWeight: 700 }}
-              >
-                {c.unread}
-              </span>
-            )}
-            <button
-              onClick={() => setActiveCommunity(c.id)}
-              title={c.name}
-              className="w-10 h-10 rounded-2xl flex items-center justify-center text-xs text-white transition-all hover:rounded-xl"
-              style={{
-                background: activeCommunity === c.id ? c.color : "rgba(255,255,255,0.08)",
-                fontWeight: 700,
-                outline: activeCommunity === c.id ? `3px solid ${c.color}` : "none",
-                outlineOffset: 2,
-              }}
-            >
-              {c.avatar}
-            </button>
-          </div>
-        ))}
-
-        <div className="w-8 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />
-
-        {/* Add community */}
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all hover:bg-green-500/20"
-          style={{ background: "rgba(255,255,255,0.06)", color: "#4ade80" }}
-          title="Create Community"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
-
-        {/* Explore Communities Search */}
-        <button
-          onClick={() => { setShowExploreModal(true); searchCommunities(); }}
-          className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all hover:bg-purple-500/20"
-          style={{ background: "rgba(255,255,255,0.06)", color: "#c084fc" }}
-          title="Explore Communities"
-        >
-          <Search className="w-4 h-4" />
-        </button>
-
-        {/* Join with code */}
-        <button
-          onClick={() => setShowJoinModal(true)}
-          className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all hover:bg-blue-500/20"
-          style={{ background: "rgba(255,255,255,0.06)", color: "#60a5fa" }}
-          title="Join with Code"
-        >
-          <UserPlus className="w-4 h-4" />
-        </button>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* User avatar */}
-        <div className="relative">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-xs text-white"
-            style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
-          >
-            SM
-          </div>
-          <span
-            className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2"
-            style={{ background: "#22c55e", borderColor: "#0f172a" }}
-          />
-        </div>
-      </div>
-
-      {/* ── CHANNEL SIDEBAR ── */}
-      <div
-        className="w-56 flex flex-col shrink-0"
-        style={{
-          background: "#131d35",
-          borderRight: "1px solid rgba(255,255,255,0.05)",
-        }}
-      >
-        {/* Community header */}
+      {/* Mobile Drawer Overlay */}
+      {mobileMenuOpen && (
         <div
-          className="px-4 py-4 flex items-center justify-between group transition-colors relative"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* ── MOBILE DRAWER CONTAINER ── */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 flex transform transition-transform duration-300 md:relative md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+      >
+        {/* ── FAR LEFT: Community icon rail (Discord-style) ── */}
+        <div
+          className="w-16 flex flex-col items-center py-4 gap-3 shrink-0"
+          style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            {community.name ? (
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
-                style={{ background: community.color, fontWeight: 700 }}
-              >
-                {community.avatar}
-              </div>
-            ) : (
-              <div className="w-7 h-7 rounded-lg bg-gray-700 animate-pulse shrink-0"></div>
-            )}
-            {community.name ? (
-              <span className="text-white text-sm truncate" style={{ fontWeight: 700 }}>
-                {community.name}
-              </span>
-            ) : (
-              <div className="h-4 w-24 bg-gray-700 animate-pulse rounded"></div>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            {community.created_by === sessionUser?.id && community.id !== "0" && (
-              <button onClick={deleteCommunity} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-            <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-          </div>
-        </div>
-
-        {/* Community type badge */}
-        <div className="px-4 pt-3 pb-1">
-          <span
-            className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"
-            style={{
-              background:
-                community.type === "private"
-                  ? "rgba(239,68,68,0.15)"
-                  : community.type === "school"
-                    ? "rgba(30,58,138,0.2)"
-                    : "rgba(5,150,105,0.15)",
-              color:
-                community.type === "private"
-                  ? "#f87171"
-                  : community.type === "school"
-                    ? "#93c5fd"
-                    : "#4ade80",
-            }}
+          {/* Home */}
+          <button
+            onClick={() => navigate("/teacher")}
+            className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all"
+            style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+            title="Dashboard"
           >
-            {community.type === "private" ? <Lock className="w-3 h-3" /> :
-              community.type === "school" ? <BookOpen className="w-3 h-3" /> :
-                <Globe className="w-3 h-3" />}
-            {community.type.charAt(0).toUpperCase() + community.type.slice(1)}
-          </span>
-        </div>
+            <GraduationCap className="w-5 h-5 text-white" />
+          </button>
 
-        {/* Channels */}
-        <div className="flex-1 overflow-y-auto px-2 py-2" style={{ scrollbarWidth: "thin" }}>
-          {/* Text Channels */}
-          <div className="mb-2">
-            <div
-              className="flex items-center justify-between px-2 py-1 mb-1"
-            >
-              <span className="text-xs text-gray-500 uppercase tracking-wider" style={{ fontWeight: 600 }}>
-                Channels
-              </span>
-              {viewerRole === "teacher" && (
-                <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
-              )}
-            </div>
-            {channels.text.map((ch) => {
-              const isLocked = ch.locked && viewerRole !== "teacher";
-              return (
-                <button
-                  key={ch.id}
-                  onClick={() => !isLocked && setActiveChannel(ch.id)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 transition-colors text-left"
-                  style={{
-                    background: activeChannel === ch.id ? "rgba(255,255,255,0.1)" : "transparent",
-                    color: isLocked ? "rgba(255,255,255,0.25)" : activeChannel === ch.id ? "white" : "rgba(255,255,255,0.55)",
-                    cursor: isLocked ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {isLocked ? (
-                    <Lock className="w-3.5 h-3.5 shrink-0" />
-                  ) : (
-                    <Hash className="w-3.5 h-3.5 shrink-0" />
-                  )}
-                  <span className="text-sm flex-1"># {ch.name}</span>
-                  {ch.unread > 0 && !isLocked && (
-                    <span
-                      className="w-4 h-4 rounded-full flex items-center justify-center text-white"
-                      style={{ background: "#7c3aed", fontSize: "0.6rem" }}
-                    >
-                      {ch.unread}
-                    </span>
-                  )}
-                  {isLocked && (
-                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
-                      Teacher only
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <div className="w-8 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />
 
-          {/* Rooms */}
-          <div>
-            <div className="flex items-center justify-between px-2 py-1 mb-1">
-              <span className="text-xs text-gray-500 uppercase tracking-wider" style={{ fontWeight: 600 }}>
-                Rooms
-              </span>
-              {viewerRole === "teacher" && (
-                <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
-              )}
-            </div>
-            {channels.rooms.map((room) => (
-              <button
-                key={room.id}
-                onClick={() => handleJoinRoom(room)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 hover:bg-white/5 transition-colors text-left"
-              >
-                <Video className="w-3.5 h-3.5 shrink-0" style={{ color: room.live ? "#4ade80" : "rgba(255,255,255,0.3)" }} />
+          {/* Communities */}
+          {communities.map((c) => (
+            <div key={c.id} className="relative">
+              {c.unread > 0 && (
                 <span
-                  className="text-sm flex-1 truncate"
-                  style={{ color: room.live ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)" }}
+                  className="absolute -right-1 -top-1 w-4 h-4 rounded-full flex items-center justify-center text-white z-10"
+                  style={{ background: "#ef4444", fontSize: "0.6rem", fontWeight: 700 }}
                 >
-                  {room.name}
+                  {c.unread}
                 </span>
-                {room.live && (
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded-full"
-                    style={{ background: "rgba(34,197,94,0.2)", color: "#4ade80" }}
-                  >
-                    {room.participants}
-                  </span>
-                )}
-                {pendingRooms.includes(room.id) && (
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded-full"
-                    style={{ background: "rgba(251,191,36,0.2)", color: "#fbbf24" }}
-                  >
-                    Pending
-                  </span>
-                )}
+              )}
+              <button
+                onClick={() => setActiveCommunity(c.id)}
+                title={c.name}
+                className="w-10 h-10 rounded-2xl flex items-center justify-center text-xs text-white transition-all hover:rounded-xl"
+                style={{
+                  background: activeCommunity === c.id ? c.color : "rgba(255,255,255,0.08)",
+                  fontWeight: 700,
+                  outline: activeCommunity === c.id ? `3px solid ${c.color}` : "none",
+                  outlineOffset: 2,
+                }}
+              >
+                {c.avatar}
               </button>
-            ))}
-          </div>
-        </div>
+            </div>
+          ))}
 
-        {/* User controls */}
-        <div
-          className="px-2 py-2 flex items-center gap-2"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "#0f1929" }}
-        >
+          <div className="w-8 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />
+
+          {/* Add community */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all hover:bg-green-500/20"
+            style={{ background: "rgba(255,255,255,0.06)", color: "#4ade80" }}
+            title="Create Community"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+
+          {/* Explore Communities Search */}
+          <button
+            onClick={() => { setShowExploreModal(true); searchCommunities(); }}
+            className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all hover:bg-purple-500/20"
+            style={{ background: "rgba(255,255,255,0.06)", color: "#c084fc" }}
+            title="Explore Communities"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+
+          {/* Join with code */}
+          <button
+            onClick={() => setShowJoinModal(true)}
+            className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all hover:bg-blue-500/20"
+            style={{ background: "rgba(255,255,255,0.06)", color: "#60a5fa" }}
+            title="Join with Code"
+          >
+            <UserPlus className="w-4 h-4" />
+          </button>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* User avatar */}
           <div className="relative">
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-xs text-white"
               style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
             >
               SM
             </div>
             <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
-              style={{ background: "#22c55e" }}
+              className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2"
+              style={{ background: "#22c55e", borderColor: "#0f172a" }}
             />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>Sofia Mendez</div>
-            <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>#teacher</div>
+        </div>
+
+        {/* ── CHANNEL SIDEBAR ── */}
+        <div
+          className="w-56 flex flex-col shrink-0"
+          style={{
+            background: "#131d35",
+            borderRight: "1px solid rgba(255,255,255,0.05)",
+          }}
+        >
+          {/* Community header */}
+          <div
+            className="px-4 py-4 flex items-center justify-between group transition-colors relative"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              {community.name ? (
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
+                  style={{ background: community.color, fontWeight: 700 }}
+                >
+                  {community.avatar}
+                </div>
+              ) : (
+                <div className="w-7 h-7 rounded-lg bg-gray-700 animate-pulse shrink-0"></div>
+              )}
+              {community.name ? (
+                <span className="text-white text-sm truncate" style={{ fontWeight: 700 }}>
+                  {community.name}
+                </span>
+              ) : (
+                <div className="h-4 w-24 bg-gray-700 animate-pulse rounded"></div>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {community.created_by === sessionUser?.id && community.id !== "0" && (
+                <button onClick={deleteCommunity} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+            </div>
           </div>
-          <div className="flex gap-0.5">
-            <button onClick={() => setMicOn(!micOn)} className="p-1.5 rounded hover:bg-white/10 transition-colors">
-              {micOn ? <Mic className="w-3.5 h-3.5 text-gray-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
-            </button>
-            <button onClick={() => setHeadphonesOn(!headphonesOn)} className="p-1.5 rounded hover:bg-white/10 transition-colors">
-              <Headphones className={`w-3.5 h-3.5 ${headphonesOn ? "text-gray-400" : "text-red-400"}`} />
-            </button>
-            <button className="p-1.5 rounded hover:bg-white/10 transition-colors">
-              <Settings className="w-3.5 h-3.5 text-gray-400" />
-            </button>
+
+          {/* Community type badge */}
+          <div className="px-4 pt-3 pb-1">
+            <span
+              className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"
+              style={{
+                background:
+                  community.type === "private"
+                    ? "rgba(239,68,68,0.15)"
+                    : community.type === "school"
+                      ? "rgba(30,58,138,0.2)"
+                      : "rgba(5,150,105,0.15)",
+                color:
+                  community.type === "private"
+                    ? "#f87171"
+                    : community.type === "school"
+                      ? "#93c5fd"
+                      : "#4ade80",
+              }}
+            >
+              {community.type === "private" ? <Lock className="w-3 h-3" /> :
+                community.type === "school" ? <BookOpen className="w-3 h-3" /> :
+                  <Globe className="w-3 h-3" />}
+              {community.type.charAt(0).toUpperCase() + community.type.slice(1)}
+            </span>
+          </div>
+
+          {/* Channels */}
+          <div className="flex-1 overflow-y-auto px-2 py-2" style={{ scrollbarWidth: "thin" }}>
+            {/* Text Channels */}
+            <div className="mb-2">
+              <div
+                className="flex items-center justify-between px-2 py-1 mb-1"
+              >
+                <span className="text-xs text-gray-500 uppercase tracking-wider" style={{ fontWeight: 600 }}>
+                  Channels
+                </span>
+                {viewerRole === "teacher" && (
+                  <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
+                )}
+              </div>
+              {channels.text.map((ch) => {
+                const isLocked = ch.locked && viewerRole !== "teacher";
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => !isLocked && setActiveChannel(ch.id)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 transition-colors text-left"
+                    style={{
+                      background: activeChannel === ch.id ? "rgba(255,255,255,0.1)" : "transparent",
+                      color: isLocked ? "rgba(255,255,255,0.25)" : activeChannel === ch.id ? "white" : "rgba(255,255,255,0.55)",
+                      cursor: isLocked ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isLocked ? (
+                      <Lock className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <Hash className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span className="text-sm flex-1"># {ch.name}</span>
+                    {ch.unread > 0 && !isLocked && (
+                      <span
+                        className="w-4 h-4 rounded-full flex items-center justify-center text-white"
+                        style={{ background: "#7c3aed", fontSize: "0.6rem" }}
+                      >
+                        {ch.unread}
+                      </span>
+                    )}
+                    {isLocked && (
+                      <span className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
+                        Teacher only
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Rooms */}
+            <div>
+              <div className="flex items-center justify-between px-2 py-1 mb-1">
+                <span className="text-xs text-gray-500 uppercase tracking-wider" style={{ fontWeight: 600 }}>
+                  Rooms
+                </span>
+                {viewerRole === "teacher" && (
+                  <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
+                )}
+              </div>
+              {channels.rooms.map((room) => (
+                <button
+                  key={room.id}
+                  onClick={() => handleJoinRoom(room)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 hover:bg-white/5 transition-colors text-left"
+                >
+                  <Video className="w-3.5 h-3.5 shrink-0" style={{ color: room.live ? "#4ade80" : "rgba(255,255,255,0.3)" }} />
+                  <span
+                    className="text-sm flex-1 truncate"
+                    style={{ color: room.live ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)" }}
+                  >
+                    {room.name}
+                  </span>
+                  {room.live && (
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded-full"
+                      style={{ background: "rgba(34,197,94,0.2)", color: "#4ade80" }}
+                    >
+                      {room.participants}
+                    </span>
+                  )}
+                  {pendingRooms.includes(room.id) && (
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded-full"
+                      style={{ background: "rgba(251,191,36,0.2)", color: "#fbbf24" }}
+                    >
+                      Pending
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* User controls */}
+          <div
+            className="px-2 py-2 flex items-center gap-2"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "#0f1929" }}
+          >
+            <div className="relative">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
+                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
+              >
+                SM
+              </div>
+              <span
+                className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
+                style={{ background: "#22c55e" }}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>Sofia Mendez</div>
+              <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>#teacher</div>
+            </div>
+            <div className="flex gap-0.5">
+              <button onClick={() => setMicOn(!micOn)} className="p-1.5 rounded hover:bg-white/10 transition-colors">
+                {micOn ? <Mic className="w-3.5 h-3.5 text-gray-400" /> : <MicOff className="w-3.5 h-3.5 text-red-400" />}
+              </button>
+              <button onClick={() => setHeadphonesOn(!headphonesOn)} className="p-1.5 rounded hover:bg-white/10 transition-colors">
+                <Headphones className={`w-3.5 h-3.5 ${headphonesOn ? "text-gray-400" : "text-red-400"}`} />
+              </button>
+              <button className="p-1.5 rounded hover:bg-white/10 transition-colors">
+                <Settings className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+
+      </div> {/* End Mobile Drawer Container */}
 
       {/* ── MAIN CONTENT — Chat area ── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full overflow-hidden">
         {/* Channel header */}
         <div
-          className="h-12 flex items-center justify-between px-5 shrink-0"
+          className="h-12 flex items-center justify-between px-3 md:px-5 shrink-0"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "#0f172a" }}
         >
           <div className="flex items-center gap-2">
-            <Hash className="w-4 h-4 text-gray-400" />
+            <button className="md:hidden p-1.5 rounded hover:bg-white/10 transition-colors mr-1 shrink-0" onClick={() => setMobileMenuOpen(true)}>
+              <Menu className="w-5 h-5 text-gray-400" />
+            </button>
+            <Hash className="w-4 h-4 text-gray-400 hidden sm:block shrink-0" />
             {channel.name ? (
-              <span className="text-white text-sm" style={{ fontWeight: 700 }}>
+              <span className="text-white text-sm truncate max-w-[120px] sm:max-w-[200px]" style={{ fontWeight: 700 }}>
                 {channel.name}
               </span>
             ) : (
@@ -695,18 +715,19 @@ export function CommunityPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs animate-pulse"
                 style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24" }}
               >
-                <Bell className="w-3.5 h-3.5" />
-                {joinRequests.length} Join Request{joinRequests.length > 1 ? "s" : ""}
+                <Bell className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">{joinRequests.length} Join Request{joinRequests.length > 1 ? "s" : ""}</span>
+                <span className="sm:hidden">{joinRequests.length}</span>
               </button>
             )}
-            <button className="p-1.5 rounded hover:bg-white/10 transition-colors">
+            <button className="hidden sm:block p-1.5 rounded hover:bg-white/10 transition-colors shrink-0">
               <Search className="w-4 h-4 text-gray-400" />
             </button>
-            <button className="p-1.5 rounded hover:bg-white/10 transition-colors">
+            <button className="hidden sm:block p-1.5 rounded hover:bg-white/10 transition-colors shrink-0">
               <Bell className="w-4 h-4 text-gray-400" />
             </button>
-            <button className="p-1.5 rounded hover:bg-white/10 transition-colors">
-              <Users className="w-4 h-4 text-gray-400" />
+            <button className="p-1.5 rounded hover:bg-white/10 transition-colors lg:hidden shrink-0" onClick={() => setMembersOpen(!membersOpen)}>
+              <Users className="w-4 h-4" style={{ color: membersOpen ? "white" : "#9ca3af" }} />
             </button>
           </div>
         </div>
@@ -788,149 +809,152 @@ export function CommunityPage() {
           </div>
 
           {/* Rooms panel / Join requests panel */}
-          {showRequestsPanel && viewerRole === "teacher" ? (
-            <div
-              className="w-72 shrink-0 flex flex-col"
-              style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", background: "#0d1b30" }}
-            >
+          {membersOpen && <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setMembersOpen(false)} />}
+          <div className={`${membersOpen ? 'fixed right-0 z-50 h-full shadow-2xl' : 'hidden'} lg:static lg:flex shrink-0 h-full`}>
+            {showRequestsPanel && viewerRole === "teacher" ? (
               <div
-                className="px-4 py-3 flex items-center justify-between"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+                className="w-72 shrink-0 flex flex-col h-full bg-[#0d1b30]"
+                style={{ borderLeft: "1px solid rgba(255,255,255,0.06)" }}
               >
-                <span className="text-sm text-white" style={{ fontWeight: 700 }}>
-                  Join Requests
-                </span>
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ background: "rgba(251,191,36,0.2)", color: "#fbbf24" }}
+                <div
+                  className="px-4 py-3 flex items-center justify-between"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
                 >
-                  {joinRequests.length} pending
-                </span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                {joinRequests.length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="text-gray-500 text-sm">No pending requests</div>
-                  </div>
-                )}
-                {joinRequests.map((req, i) => (
-                  <div
-                    key={i}
-                    className="rounded-xl p-4"
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  <span className="text-sm text-white" style={{ fontWeight: 700 }}>
+                    Join Requests
+                  </span>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: "rgba(251,191,36,0.2)", color: "#fbbf24" }}
                   >
-                    <div className="flex items-center gap-3 mb-3">
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white"
-                        style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
-                      >
-                        {req.avatar}
+                    {joinRequests.length} pending
+                  </span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  {joinRequests.length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="text-gray-500 text-sm">No pending requests</div>
+                    </div>
+                  )}
+                  {joinRequests.map((req, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl p-4"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white"
+                          style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)", fontWeight: 700 }}
+                        >
+                          {req.avatar}
+                        </div>
+                        <div>
+                          <div className="text-sm text-white" style={{ fontWeight: 600 }}>{req.name}</div>
+                          <div className="text-xs text-gray-400">→ {req.room}</div>
+                          <div className="text-xs text-gray-600">{req.time}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-sm text-white" style={{ fontWeight: 600 }}>{req.name}</div>
-                        <div className="text-xs text-gray-400">→ {req.room}</div>
-                        <div className="text-xs text-gray-600">{req.time}</div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => approveRequest(i)}
+                          className="flex-1 py-1.5 rounded-lg text-xs"
+                          style={{ background: "rgba(34,197,94,0.2)", color: "#4ade80" }}
+                        >
+                          ✓ Approve
+                        </button>
+                        <button
+                          onClick={() => denyRequest(i)}
+                          className="flex-1 py-1.5 rounded-lg text-xs"
+                          style={{ background: "rgba(239,68,68,0.2)", color: "#f87171" }}
+                        >
+                          ✗ Deny
+                        </button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => approveRequest(i)}
-                        className="flex-1 py-1.5 rounded-lg text-xs"
-                        style={{ background: "rgba(34,197,94,0.2)", color: "#4ade80" }}
-                      >
-                        ✓ Approve
-                      </button>
-                      <button
-                        onClick={() => denyRequest(i)}
-                        className="flex-1 py-1.5 rounded-lg text-xs"
-                        style={{ background: "rgba(239,68,68,0.2)", color: "#f87171" }}
-                      >
-                        ✗ Deny
-                      </button>
-                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Members sidebar */
+              <div
+                className="w-56 shrink-0 overflow-y-auto py-4 h-full bg-[#0d1b30]"
+                style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", scrollbarWidth: "thin" }}
+              >
+                {/* Teachers */}
+                <div className="px-3 mb-3">
+                  <div className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-2" style={{ fontWeight: 600 }}>
+                    Teachers — {members.filter(m => m.role === "teacher").length}
                   </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            /* Members sidebar */
-            <div
-              className="w-56 shrink-0 overflow-y-auto py-4"
-              style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", background: "#0d1b30", scrollbarWidth: "thin" }}
-            >
-              {/* Teachers */}
-              <div className="px-3 mb-3">
-                <div className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-2" style={{ fontWeight: 600 }}>
-                  Teachers — {members.filter(m => m.role === "teacher").length}
+                  {members.filter(m => m.role === "teacher" || m.role === "admin").map((m, i) => {
+                    const badge = roleBadge(m.role);
+                    return (
+                      <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                        <div className="relative shrink-0">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
+                            style={{ background: badge.color, fontWeight: 700 }}
+                          >
+                            {m.avatar}
+                          </div>
+                          <span
+                            className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
+                            style={{ background: statusColor(m.status) }}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>
+                            {m.name}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span style={{ color: badge.color }}>{badge.icon}</span>
+                            <span className="text-xs" style={{ color: badge.color }}>{badge.label}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {members.filter(m => m.role === "teacher" || m.role === "admin").map((m, i) => {
-                  const badge = roleBadge(m.role);
-                  return (
-                    <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
-                      <div className="relative shrink-0">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
-                          style={{ background: badge.color, fontWeight: 700 }}
-                        >
-                          {m.avatar}
-                        </div>
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
-                          style={{ background: statusColor(m.status) }}
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs text-white truncate" style={{ fontWeight: 600 }}>
-                          {m.name}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span style={{ color: badge.color }}>{badge.icon}</span>
-                          <span className="text-xs" style={{ color: badge.color }}>{badge.label}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
 
-              <div className="mx-3 h-px mb-3" style={{ background: "rgba(255,255,255,0.06)" }} />
+                <div className="mx-3 h-px mb-3" style={{ background: "rgba(255,255,255,0.06)" }} />
 
-              {/* Students */}
-              <div className="px-3">
-                <div className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-2" style={{ fontWeight: 600 }}>
-                  Students — {members.filter(m => m.role === "student").length}
+                {/* Students */}
+                <div className="px-3">
+                  <div className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-2" style={{ fontWeight: 600 }}>
+                    Students — {members.filter(m => m.role === "student").length}
+                  </div>
+                  {members.filter(m => m.role === "student").map((m, i) => {
+                    const badge = roleBadge(m.role);
+                    return (
+                      <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                        <div className="relative shrink-0">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
+                            style={{ background: "rgba(255,255,255,0.12)", fontWeight: 700 }}
+                          >
+                            {m.avatar}
+                          </div>
+                          <span
+                            className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
+                            style={{ background: statusColor(m.status) }}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <div
+                            className="text-xs truncate"
+                            style={{ color: m.status === "offline" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.75)" }}
+                          >
+                            {m.name}
+                          </div>
+                          <div className="text-xs text-gray-600 capitalize">{m.status}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {members.filter(m => m.role === "student").map((m, i) => {
-                  const badge = roleBadge(m.role);
-                  return (
-                    <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
-                      <div className="relative shrink-0">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
-                          style={{ background: "rgba(255,255,255,0.12)", fontWeight: 700 }}
-                        >
-                          {m.avatar}
-                        </div>
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
-                          style={{ background: statusColor(m.status) }}
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <div
-                          className="text-xs truncate"
-                          style={{ color: m.status === "offline" ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.75)" }}
-                        >
-                          {m.name}
-                        </div>
-                        <div className="text-xs text-gray-600 capitalize">{m.status}</div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
-            </div>
-          )}
+            )}
+          </div> {/* End target wrapper */}
         </div>
       </div>
 

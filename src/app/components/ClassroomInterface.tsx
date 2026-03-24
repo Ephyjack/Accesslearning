@@ -212,6 +212,7 @@ export function ClassroomInterface() {
     const [pendingRequests, setPendingRequests] = useState<any[]>([]);
     const [aiEnabled, setAiEnabled] = useState(true);
     const [aiSummary, setAiSummary] = useState("Waiting for sufficient dialogue to generate summary...");
+    const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
     // Active Speaker & Pinning Logic
     const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
@@ -472,9 +473,9 @@ export function ClassroomInterface() {
         </header>
 
         {/* BODY */}
-        <div className="flex flex-1 overflow-hidden w-full">
+        <div className="flex flex-1 overflow-hidden w-full relative">
           {/* LEFT COLUMN — AI Panels */}
-          <div className="w-80 flex flex-col shrink-0 transition-all duration-300 relative" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="hidden lg:flex w-80 flex-col shrink-0 transition-all duration-300 relative" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
             {isTeacher && (
               <div className="absolute top-2 right-2 z-10">
                 <button onClick={() => setAiEnabled(!aiEnabled)} className={`text-xs px-2 py-1 rounded-md ${aiEnabled ? 'bg-violet-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
@@ -642,7 +643,11 @@ export function ClassroomInterface() {
 
             {/* Bottom controls */}
             <div className="h-16 flex items-center justify-center px-6 shrink-0 w-full border-t border-white/5">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <button onClick={() => setMobileChatOpen(!mobileChatOpen)} className="lg:hidden p-3 rounded-full transition-all hover:opacity-80" style={{ background: mobileChatOpen ? "rgba(124,58,237,0.3)" : "rgba(255,255,255,0.07)" }}>
+                  <MessageSquare className={`w-5 h-5 ${mobileChatOpen ? 'text-violet-400' : 'text-white'}`} />
+                </button>
+                <div className="w-px h-6 bg-white/10 lg:hidden" />
                 <button onClick={async () => { const next = !micOn; setMicOn(next); await localParticipant.setMicrophoneEnabled(next); }} className="p-3 rounded-full transition-all hover:opacity-80" style={{ background: micOn ? "rgba(255,255,255,0.07)" : "rgba(239,68,68,0.2)" }}>
                   {micOn ? <Mic className="w-5 h-5 text-white" /> : <MicOff className="w-5 h-5 text-red-400" />}
                 </button>
@@ -665,7 +670,13 @@ export function ClassroomInterface() {
           </div>
 
           {/* RIGHT SIDEBAR */}
-          <div className="w-80 flex flex-col shrink-0" style={{ borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className={`${mobileChatOpen ? 'fixed inset-0 z-50 bg-[#0f172a]' : 'hidden'} lg:static lg:flex w-full lg:w-80 flex-col shrink-0`} style={{ borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
+            {mobileChatOpen && (
+              <div className="lg:hidden h-14 flex items-center justify-between px-4 border-b border-white/10 shrink-0">
+                <span className="text-white font-bold text-sm">Chat & Participants</span>
+                <button onClick={() => setMobileChatOpen(false)} className="p-2 text-gray-400 hover:bg-white/10 rounded-lg"><ChevronDown className="w-5 h-5 -rotate-90" /></button>
+              </div>
+            )}
             <div className="flex shrink-0 w-full" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               {["chat", "participants"].map((tab) => (
                 <button

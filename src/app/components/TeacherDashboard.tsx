@@ -28,6 +28,7 @@ import {
   UserX,
   Hash,
   Lock,
+  Menu, X
 } from "lucide-react";
 import {
   AreaChart,
@@ -47,6 +48,7 @@ export function TeacherDashboard() {
   // -----------------------
   // Tabs & Modals
   // -----------------------
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities">("classes");
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -296,33 +298,46 @@ export function TeacherDashboard() {
   // Render JSX: Top bar
   // -----------------------
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex bg-gray-50 min-h-screen">
+      {/* Mobile Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-20 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar here if any */}
       <aside
-        className="w-64 flex flex-col fixed h-full z-20"
+        className={`w-64 flex flex-col fixed h-full z-30 transition-transform duration-300 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{
           background: "linear-gradient(180deg, #0f172a 0%, #1a2d6e 100%)",
           borderRight: "1px solid rgba(255,255,255,0.05)",
         }}
       >
         {/* Logo */}
-        <div className="p-6 mb-2">
-          <div className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: "rgba(255,255,255,0.1)" }}
-            >
-              <GraduationCap className="w-5 h-5 text-white" />
+        <div className="p-6 mb-2 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: "rgba(255,255,255,0.1)" }}
+              >
+                <GraduationCap className="w-5 h-5 text-white" />
+              </div>
+              <span
+                className="text-white"
+                style={{ fontWeight: 700, fontSize: "1.05rem" }}
+              >
+                Access<span style={{ color: "#a78bfa" }}>Learn</span>
+              </span>
             </div>
-            <span
-              className="text-white"
-              style={{ fontWeight: 700, fontSize: "1.05rem" }}
-            >
-              Access<span style={{ color: "#a78bfa" }}>Learn</span>
-            </span>
+            <button className="lg:hidden text-white hover:bg-white/10 p-1 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+              <X className="w-5 h-5" />
+            </button>
           </div>
           <div
-            className="mt-3 text-xs px-2 py-1 rounded-full inline-block"
+            className="text-xs px-2 py-1 rounded-full inline-block w-fit"
             style={{ background: "rgba(124,58,237,0.25)", color: "#c4b5fd" }}
           >
             {profile?.role === "teacher"
@@ -475,33 +490,39 @@ export function TeacherDashboard() {
         </div>
       </aside>
 
-      <main className="flex-1 ml-64 p-8">
+      <main className="flex-1 lg:ml-64 p-4 lg:p-8 w-full overflow-hidden">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1
-              style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a" }}
-            >
-              Good afternoon, {profile?.full_name?.split(" ")[0] || "Teacher"}{" "}
-              👋
-            </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              You have {classes.length}{" "}
-              {classes.length === 1 ? "class" : "classes"} scheduled today
-            </p>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8 mt-2 lg:mt-0">
+          <div className="flex items-center gap-3">
+            <button className="lg:hidden p-2 -ml-2 rounded-xl bg-white border shadow-sm shrink-0" style={{ borderColor: "#e2e8f0" }} onClick={() => setMobileMenuOpen(true)}>
+              <Menu className="w-5 h-5 text-gray-700" />
+            </button>
+            <div>
+              <h1
+                style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a" }}
+              >
+                Good afternoon, {profile?.full_name?.split(" ")[0] || "Teacher"}{" "}
+                👋
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                You have {classes.length}{" "}
+                {classes.length === 1 ? "class" : "classes"} scheduled today
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 lg:gap-3 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
             {/* Search Input */}
-            <div className="relative">
+            <div className="relative shrink-0 flex-1 lg:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 placeholder="Search classes…"
-                className="pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none"
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none"
                 style={{
                   borderColor: "#e2e8f0",
                   background: "white",
-                  minWidth: 220,
+                  minWidth: 140,
+                  maxWidth: 220,
                 }}
               />
             </div>
@@ -509,7 +530,7 @@ export function TeacherDashboard() {
             {/* Notifications */}
             <button
               onClick={() => setShowAccessModal(true)}
-              className="relative p-2.5 rounded-xl bg-white border"
+              className="relative p-2.5 rounded-xl bg-white border shrink-0"
               style={{ borderColor: "#e2e8f0" }}
             >
               <Bell className="w-5 h-5 text-gray-500" />
@@ -524,19 +545,20 @@ export function TeacherDashboard() {
             {/* Create Classroom */}
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90"
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90"
               style={{
                 background: "linear-gradient(135deg, #1e3a8a, #7c3aed)",
               }}
             >
               <Plus className="w-4 h-4" />
-              Create Classroom
+              <span className="hidden sm:inline">Create Classroom</span>
+              <span className="sm:hidden">Create</span>
             </button>
           </div>
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-4 gap-5 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 mb-6 lg:mb-8">
           {[
             {
               icon: <Users className="w-5 h-5" />,
@@ -601,16 +623,16 @@ export function TeacherDashboard() {
         </div>
 
         {/* Tab toggle */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
           <div
-            className="flex p-1 rounded-xl"
-            style={{ background: "#f1f5f9" }}
+            className="flex p-1 rounded-xl w-full sm:w-auto overflow-x-auto"
+            style={{ background: "#f1f5f9", scrollbarWidth: "none" }}
           >
             {(["classes", "rooms", "communities"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                className="px-5 py-2 rounded-lg text-sm capitalize transition-all"
+                className="px-5 py-2 rounded-lg text-sm capitalize transition-all shrink-0 flex-1 sm:flex-none"
                 style={{
                   background: activeTab === t ? "white" : "transparent",
                   color: activeTab === t ? "#0f172a" : "#64748b",
@@ -1034,8 +1056,8 @@ export function TeacherDashboard() {
                         className="h-full rounded-full"
                         style={{
                           width: `${a.total_students > 0
-                              ? (a.submissions_count / a.total_students) * 100
-                              : 0
+                            ? (a.submissions_count / a.total_students) * 100
+                            : 0
                             }%`,
                           background:
                             "linear-gradient(90deg, #1e3a8a, #7c3aed)",
