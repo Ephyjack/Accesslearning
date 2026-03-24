@@ -213,9 +213,27 @@ export function ClassroomInterface() {
     const [aiEnabled, setAiEnabled] = useState(true);
     const [aiSummary, setAiSummary] = useState("Waiting for sufficient dialogue to generate summary...");
 
-    // Active Speaker Logic
-    const activeSpeakers = allParticipants.filter(p => p.isSpeaking);
-    const activeSpeaker = activeSpeakers.length > 0 ? activeSpeakers[0] : (allParticipants.length > 0 ? allParticipants[0] : localParticipant);
+    // Active Speaker & Pinning Logic
+    const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
+    const lastActiveSpeakerIdRef = useRef<string | null>(null);
+
+    // Update last active speaker whenever someone speaks (sticky — persists after they stop)
+    const currentlySpeaking = allParticipants.find(p => p.isSpeaking);
+    if (currentlySpeaking) {
+      lastActiveSpeakerIdRef.current = currentlySpeaking.identity;
+    }
+
+    // Clear pin if the pinned participant has left the room
+    useEffect(() => {
+      if (pinnedParticipantId && !allParticipants.find(p => p.identity === pinnedParticipantId)) {
+        setPinnedParticipantId(null);
+      }
+    }, [allParticipants, pinnedParticipantId]);
+
+    // Determine who appears on the main stage: pinned > last active speaker > first participant
+    const pinnedParticipant = pinnedParticipantId ? allParticipants.find(p => p.identity === pinnedParticipantId) || null : null;
+    const lastActiveSpeaker = lastActiveSpeakerIdRef.current ? allParticipants.find(p => p.identity === lastActiveSpeakerIdRef.current) || null : null;
+    const mainStageParticipant = pinnedParticipant || lastActiveSpeaker || (allParticipants.length > 0 ? allParticipants[0] : localParticipant);
 
     // LiveKit Streams
     const videoTracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare]);
@@ -497,44 +515,129 @@ export function ClassroomInterface() {
 
           {/* CENTER — Main teaching area */}
           <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-            <div className="flex-1 flex flex-col items-center justify-center bg-black p-4 relative overflow-hidden">
+            <div className="flex-1 flex flex-col bg-black relative overflow-hidden">
 
-              {/* Main Viewer */}
-              {myScreenTrack || screenTrack ? (
-                <>
-                  <div className="w-full h-full rounded-lg overflow-hidden flex items-center justify-center relative bg-[#111]">
-                    {myScreenTrack ? (
-                      <VideoTrack trackRef={myScreenTrack} className="w-full h-full object-contain" />
-                    ) : screenTrack ? (
-                      <VideoTrack trackRef={screenTrack} className="w-full h-full object-contain" />
-                    ) : null}
-                  </div>
-
-                  {/* PiP Active Speaker */}
-                  <div className="absolute bottom-6 right-6 rounded-xl overflow-hidden shadow-2xl z-10 cursor-move" style={{ width: 280, height: 160, border: "2px solid rgba(124,58,237,0.5)", background: "#1e293b" }}>
-                    {activeSpeaker && (
-                      <ParticipantTile
-                        trackRef={{ participant: activeSpeaker as Participant, source: Track.Source.Camera, publication: (activeSpeaker as Participant).getTrackPublication(Track.Source.Camera) } as any}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="w-full h-full rounded-xl overflow-hidden p-2 grid gap-3 bg-[#111]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", alignContent: "center" }}>
-                  {allParticipants.length > 0 ? (
-                    allParticipants.map((p: any) => (
-                      <div key={p.identity} className="relative rounded-xl overflow-hidden shadow-lg border border-white/5 bg-black" style={{ minHeight: "300px" }}>
-                        <ParticipantTile trackRef={{ participant: p as Participant, source: Track.Source.Camera, publication: p.getTrackPublication(Track.Source.Camera) } as any} className="w-full h-full object-cover" />
-                      </div>
-                    ))
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold col-span-full">
-                      Waiting for participants...
-                    </div>
-                  )}
+              {/* Participant thumbnail strip — visible when 2+ participants and no screen share */}
+              {allParticipants.length > 1 && !(myScreenTrack || screenTrack) && (
+                <div className="shrink-0 flex items-center gap-2 px-3 py-2 overflow-x-auto" style={{ background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(255,255,255,0.08)", scrollbarWidth: "thin" }}>
+                  {allParticipants.map((p: any) => {
+                    const isOnStage = p.identity === mainStageParticipant?.identity;
+                    return (
+                      <button
+                        key={p.identity}
+                        onClick={() => setPinnedParticipantId(pinnedParticipantId === p.identity ? null : p.identity)}
+                        className="shrink-0 relative rounded-lg overflow-hidden transition-all"
+                        style={{
+                          width: 120, height: 80,
+                          border: isOnStage ? "2px solid #7c3aed" : p.isSpeaking ? "2px solid #22c55e" : "2px solid rgba(255,255,255,0.1)",
+                        }}
+                      >
+                        <ParticipantTile
+                          trackRef={{ participant: p as Participant, source: Track.Source.Camera, publication: p.getTrackPublication(Track.Source.Camera) } as any}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 text-[9px] text-white truncate" style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
+                          {p.identity === localParticipant?.identity ? "You" : p.identity}
+                          {p.isSpeaking && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+                        </div>
+                        {pinnedParticipantId === p.identity && (
+                          <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-violet-600 flex items-center justify-center text-[8px]">
+                            📌
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
+
+              {/* Main Stage */}
+              <div className="flex-1 relative flex items-center justify-center p-3 overflow-hidden">
+                {myScreenTrack || screenTrack ? (
+                  <>
+                    {/* Screen share fills the main stage */}
+                    <div className="w-full h-full rounded-lg overflow-hidden flex items-center justify-center relative bg-[#111]">
+                      {myScreenTrack ? (
+                        <VideoTrack trackRef={myScreenTrack} className="w-full h-full object-contain" />
+                      ) : screenTrack ? (
+                        <VideoTrack trackRef={screenTrack} className="w-full h-full object-contain" />
+                      ) : null}
+                    </div>
+
+                    {/* PiP Active Speaker during screen share */}
+                    <div className="absolute bottom-6 right-6 rounded-xl overflow-hidden shadow-2xl z-10" style={{ width: 240, height: 140, border: "2px solid rgba(124,58,237,0.5)", background: "#1e293b" }}>
+                      {mainStageParticipant && (
+                        <ParticipantTile
+                          trackRef={{ participant: mainStageParticipant as Participant, source: Track.Source.Camera, publication: (mainStageParticipant as Participant).getTrackPublication(Track.Source.Camera) } as any}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      <div className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px] text-white" style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
+                        {mainStageParticipant?.identity === localParticipant?.identity ? "You" : mainStageParticipant?.identity}
+                      </div>
+                    </div>
+
+                    {/* Participant strip overlay during screen share */}
+                    {allParticipants.length > 1 && (
+                      <div className="absolute top-3 left-3 right-3 flex items-center gap-2 overflow-x-auto rounded-lg px-2 py-1.5" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", scrollbarWidth: "thin" }}>
+                        {allParticipants.map((p: any) => (
+                          <button
+                            key={p.identity}
+                            onClick={() => setPinnedParticipantId(pinnedParticipantId === p.identity ? null : p.identity)}
+                            className="shrink-0 relative rounded-md overflow-hidden"
+                            style={{ width: 90, height: 60, border: p.isSpeaking ? "2px solid #22c55e" : pinnedParticipantId === p.identity ? "2px solid #7c3aed" : "1px solid rgba(255,255,255,0.15)" }}
+                          >
+                            <ParticipantTile
+                              trackRef={{ participant: p as Participant, source: Track.Source.Camera, publication: p.getTrackPublication(Track.Source.Camera) } as any}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-[8px] text-white truncate" style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
+                              {p.identity === localParticipant?.identity ? "You" : p.identity}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {allParticipants.length > 0 ? (
+                      <div className="w-full h-full rounded-xl overflow-hidden bg-[#111] relative flex items-center justify-center">
+                        {/* Main stage — active/pinned speaker gets the large view */}
+                        <ParticipantTile
+                          trackRef={{ participant: mainStageParticipant as Participant, source: Track.Source.Camera, publication: (mainStageParticipant as Participant).getTrackPublication(Track.Source.Camera) } as any}
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Speaker name overlay */}
+                        <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-lg text-sm text-white font-medium flex items-center gap-2" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
+                          {mainStageParticipant?.identity === localParticipant?.identity ? "You" : mainStageParticipant?.identity}
+                          {(mainStageParticipant as any)?.isSpeaking && (
+                            <span className="flex gap-0.5 items-end">
+                              <span className="w-1 h-2 bg-green-400 rounded-full animate-pulse" />
+                              <span className="w-1 h-3 bg-green-400 rounded-full animate-pulse" style={{ animationDelay: "150ms" }} />
+                              <span className="w-1 h-2 bg-green-400 rounded-full animate-pulse" style={{ animationDelay: "300ms" }} />
+                            </span>
+                          )}
+                        </div>
+                        {/* Unpin button when someone is manually pinned */}
+                        {pinnedParticipantId && (
+                          <button
+                            onClick={() => setPinnedParticipantId(null)}
+                            className="absolute top-3 right-3 px-2.5 py-1 rounded-md text-[10px] text-white font-semibold flex items-center gap-1 transition-all hover:bg-violet-700/80"
+                            style={{ background: "rgba(124,58,237,0.7)", backdropFilter: "blur(8px)" }}
+                          >
+                            📌 Unpin
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold">
+                        Waiting for participants...
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Bottom controls */}
