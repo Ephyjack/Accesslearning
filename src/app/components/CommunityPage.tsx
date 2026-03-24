@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
+import { supabase } from "./supabaseClient";
 import {
   GraduationCap,
   Hash,
@@ -31,56 +32,47 @@ import {
 
 type Role = "teacher" | "student" | "admin";
 
-const COMMUNITIES = [
-  { id: "c1", name: "LSU Science Dept.", avatar: "LS", color: "#1e3a8a", unread: 3, type: "school" },
-  { id: "c2", name: "Global Physics Hub", avatar: "GP", color: "#7c3aed", unread: 0, type: "public" },
-  { id: "c3", name: "SS1 Study Group", avatar: "SS", color: "#059669", unread: 7, type: "private" },
-  { id: "c4", name: "Math Olympiad", avatar: "MO", color: "#d97706", unread: 1, type: "public" },
-];
+export interface Community {
+  id: string;
+  name: string;
+  avatar: string;
+  color: string;
+  type: "school" | "public" | "private";
+  unread: number;
+}
 
-const CHANNELS = {
-  text: [
-    { id: "ch1", name: "general", unread: 2, locked: false },
-    { id: "ch2", name: "announcements", unread: 0, locked: false },
-    { id: "ch3", name: "assignments", unread: 1, locked: false },
-    { id: "ch4", name: "teacher-lounge", unread: 0, locked: true },
-    { id: "ch5", name: "exam-prep", unread: 0, locked: false },
-  ],
-  rooms: [
-    { id: "r1", name: "SS1 Physics Room", teacher: "Dr. Amara Osei", participants: 12, live: true },
-    { id: "r2", name: "SS2 Chemistry Lab", teacher: "Ms. Sarah Kim", participants: 0, live: false },
-    { id: "r3", name: "Math Extra Class", teacher: "Prof. James Liu", participants: 5, live: true },
-    { id: "r4", name: "Biology Session", teacher: "Dr. Amara Osei", participants: 0, live: false },
-  ],
-};
+export interface Channel {
+  id: string;
+  name: string;
+  unread: number;
+  locked: boolean;
+}
 
-const MEMBERS = [
-  { name: "Dr. Amara Osei", role: "teacher" as Role, status: "online", avatar: "AO" },
-  { name: "Prof. James Liu", role: "teacher" as Role, status: "online", avatar: "JL" },
-  { name: "Ms. Sarah Kim", role: "admin" as Role, status: "online", avatar: "SK" },
-  { name: "Yuki Tanaka", role: "student" as Role, status: "online", avatar: "YT" },
-  { name: "Maria Santos", role: "student" as Role, status: "online", avatar: "MS" },
-  { name: "Raj Patel", role: "student" as Role, status: "idle", avatar: "RP" },
-  { name: "Liu Wei", role: "student" as Role, status: "offline", avatar: "LW" },
-  { name: "Erik Müller", role: "student" as Role, status: "online", avatar: "EM" },
-  { name: "Fatima Al-Zahra", role: "student" as Role, status: "offline", avatar: "FA" },
-  { name: "Lucas Dupont", role: "student" as Role, status: "online", avatar: "LD" },
-];
+export interface Room {
+  id: string;
+  name: string;
+  teacher: string;
+  participants: number;
+  live: boolean;
+}
 
-const MESSAGES = [
-  { user: "Dr. Amara Osei", role: "teacher" as Role, avatar: "AO", time: "09:14", text: "Good morning class! Don't forget that your lab reports are due tomorrow.", color: "#1e3a8a" },
-  { user: "Yuki Tanaka", role: "student" as Role, avatar: "YT", time: "09:17", text: "Good morning, Dr. Osei. Can we submit a PDF or do we need to print it?", color: "#7c3aed" },
-  { user: "Dr. Amara Osei", role: "teacher" as Role, avatar: "AO", time: "09:18", text: "PDF submission is perfectly fine. Upload it through the Assignments tab on the classroom page.", color: "#1e3a8a" },
-  { user: "Maria Santos", role: "student" as Role, avatar: "MS", time: "09:22", text: "Will there be an extra class this week to review the diagrams?", color: "#059669" },
-  { user: "Dr. Amara Osei", role: "teacher" as Role, avatar: "AO", time: "09:24", text: "Yes! Check the SS1 Physics Room — I'll open a live session at 3PM today.", color: "#1e3a8a" },
-  { user: "Erik Müller", role: "student" as Role, avatar: "EM", time: "09:31", text: "🙌 Thanks, see you then!", color: "#d97706" },
-];
+export interface Member {
+  id?: string;
+  name: string;
+  role: Role;
+  status: string;
+  avatar: string;
+}
 
-const JOIN_REQUESTS = [
-  { name: "Amina Osei", avatar: "AO", room: "SS1 Physics Room", time: "Just now" },
-  { name: "Carlos Vega", avatar: "CV", room: "SS1 Physics Room", time: "2 min ago" },
-  { name: "Nadia Petrov", avatar: "NP", room: "Math Extra Class", time: "5 min ago" },
-];
+export interface Message {
+  id: string;
+  user: string;
+  role: Role;
+  avatar: string;
+  time: string;
+  text: string;
+  color: string;
+}
 
 const roleBadge = (role: Role) => {
   if (role === "admin") return { label: "Admin", color: "#dc2626", icon: <Crown className="w-3 h-3" /> };
@@ -98,32 +90,184 @@ export function CommunityPage() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // Treat the viewer as a teacher for demo purposes
-  const viewerRole: Role = "teacher";
+  const [viewerRole, setViewerRole] = useState<Role>("teacher");
+  const [sessionUser, setSessionUser] = useState<any>(null);
 
-  const [activeCommunity, setActiveCommunity] = useState(id || "c1");
-  const [activeChannel, setActiveChannel] = useState("ch1");
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [activeCommunity, setActiveCommunity] = useState(id || "");
+  const [channels, setChannels] = useState<{ text: Channel[], rooms: Room[] }>({ text: [], rooms: [] });
+  const [activeChannel, setActiveChannel] = useState("");
+  const [members, setMembers] = useState<Member[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [joinRequests, setJoinRequests] = useState<any[]>([]);
+
   const [micOn, setMicOn] = useState(false);
   const [headphonesOn, setHeadphonesOn] = useState(true);
   const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState(MESSAGES);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [showJoinRoomModal, setShowJoinRoomModal] = useState<null | typeof CHANNELS.rooms[0]>(null);
-  const [joinRequests, setJoinRequests] = useState(JOIN_REQUESTS);
+  const [showJoinRoomModal, setShowJoinRoomModal] = useState<Room | null>(null);
   const [showRequestsPanel, setShowRequestsPanel] = useState(false);
   const [pendingRooms, setPendingRooms] = useState<string[]>([]);
 
-  const community = COMMUNITIES.find((c) => c.id === activeCommunity) || COMMUNITIES[0];
-  const channel = CHANNELS.text.find((c) => c.id === activeChannel) || CHANNELS.text[0];
+  // Form states
+  const [newCommName, setNewCommName] = useState("");
+  const [newCommType, setNewCommType] = useState<"public" | "private" | "school">("public");
+  const [joinCode, setJoinCode] = useState("");
 
-  const sendMessage = () => {
-    if (!chatInput.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { user: "You (Sofia Mendez)", role: "teacher", avatar: "SM", time: "09:35", text: chatInput, color: "#059669" },
-    ]);
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (user) {
+        setSessionUser(user);
+        const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+        if (profile) setViewerRole(profile.role as Role);
+      }
+
+      const { data: genericComms } = await supabase.from("communities").select("*");
+      if (genericComms) {
+        const loadedComms = genericComms.map(c => ({
+          id: c.id,
+          name: c.name,
+          avatar: c.avatar || c.name.substring(0, 2).toUpperCase(),
+          color: c.color || "#1e3a8a",
+          type: c.type || "public",
+          unread: 0
+        }));
+        setCommunities(loadedComms);
+        if (loadedComms.length > 0 && !(id || activeCommunity)) setActiveCommunity(loadedComms[0].id);
+      }
+    };
+    fetchInitialData();
+  }, [id]);
+
+  useEffect(() => {
+    if (!activeCommunity) return;
+    const fetchChannelsAndMembers = async () => {
+      const { data: mems } = await supabase.from("community_members")
+        .select(`role, profiles(id, full_name, avatar_url)`)
+        .eq("community_id", activeCommunity);
+
+      if (mems) {
+        setMembers(mems.map((m: any) => ({
+          id: m.profiles.id,
+          name: m.profiles.full_name || "Unknown",
+          role: m.role || "student",
+          status: "online",
+          avatar: m.profiles.avatar_url || m.profiles.full_name?.substring(0, 2).toUpperCase() || "UN"
+        })));
+      } else { setMembers([]); }
+
+      const { data: txts } = await supabase.from("channels").select("*").eq("community_id", activeCommunity);
+      const { data: rms } = await supabase.from("classes").select("id, name, teacher_id, status, students_count").eq("community_id", activeCommunity);
+
+      const loadedChannels = txts?.map(t => ({
+        id: t.id, name: t.name, locked: t.is_locked, unread: 0
+      })) || [];
+      const loadedRooms = rms?.map(r => ({
+        id: r.id, name: r.name, teacher: r.teacher_id, live: r.status === "live", participants: r.students_count || 0
+      })) || [];
+
+      setChannels({ text: loadedChannels, rooms: loadedRooms });
+      if (loadedChannels.length > 0) setActiveChannel(loadedChannels[0].id);
+    };
+    fetchChannelsAndMembers();
+  }, [activeCommunity]);
+
+  useEffect(() => {
+    if (!activeChannel) return;
+    const fetchMessages = async () => {
+      const { data } = await supabase.from("messages").select("*").eq("room_id", activeChannel).order("created_at", { ascending: true });
+      if (data) {
+        setMessages(data.map(m => ({
+          id: m.id,
+          user: m.user_name || "User",
+          role: "student",
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: m.text,
+          avatar: m.user_name?.substring(0, 2).toUpperCase() || "US",
+          color: "#7c3aed"
+        })));
+      } else { setMessages([]); }
+    };
+    fetchMessages();
+
+    const channel = supabase.channel(`messages:${activeChannel}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${activeChannel}` }, (payload) => {
+        const m = payload.new;
+        setMessages(prev => [...prev, {
+          id: m.id, user: m.user_name || "User", role: "student",
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: m.text, avatar: m.user_name?.substring(0, 2).toUpperCase() || "US", color: "#7c3aed"
+        }]);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeChannel]);
+
+  const community = communities.find((c) => c.id === activeCommunity) || communities[0] || { name: "Loading...", type: "public", color: "#666", avatar: ".." };
+  const channel = channels.text.find((c) => c.id === activeChannel) || channels.text[0] || { name: "loading..." };
+
+  const sendMessage = async () => {
+    if (!chatInput.trim() || !activeChannel) return;
+    const text = chatInput;
     setChatInput("");
+
+    await supabase.from("messages").insert({
+      room_id: activeChannel,
+      user_id: sessionUser?.id || null,
+      user_name: sessionUser?.user_metadata?.full_name || "Sofia Mendez",
+      text: text
+    });
+  };
+
+  const createCommunity = async () => {
+    if (!newCommName) return;
+    const { data } = await supabase.from("communities").insert({
+      name: newCommName,
+      type: newCommType,
+      avatar: newCommName.substring(0, 2).toUpperCase(),
+      color: "#1e3a8a",
+      created_by: sessionUser?.id || null
+    }).select().single();
+
+    if (data) {
+      if (sessionUser) {
+        await supabase.from("community_members").insert({
+          community_id: data.id,
+          user_id: sessionUser.id,
+          role: "admin"
+        });
+      }
+      const { data: chData } = await supabase.from("channels").insert({
+        community_id: data.id, name: "general", type: "text"
+      }).select().single();
+
+      setCommunities(prev => [...prev, { id: data.id, name: data.name, type: data.type as any, color: data.color, avatar: data.avatar, unread: 0 }]);
+      setActiveCommunity(data.id);
+      if (chData) setActiveChannel(chData.id);
+    }
+    setShowCreateModal(false);
+  };
+
+  const joinCommunity = async () => {
+    if (!joinCode || !sessionUser) return;
+
+    // Check if community exists (using joinCode as community id for demo purposes)
+    const { data: comm } = await supabase.from("communities").select("id").eq("id", joinCode).single();
+    if (comm) {
+      await supabase.from("community_members").insert({
+        community_id: joinCode,
+        user_id: sessionUser.id,
+        role: "student"
+      });
+      setActiveCommunity(joinCode);
+    }
+    setShowJoinModal(false);
+    setJoinCode("");
   };
 
   const approveRequest = (idx: number) => {
@@ -134,7 +278,7 @@ export function CommunityPage() {
     setJoinRequests((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleJoinRoom = (room: typeof CHANNELS.rooms[0]) => {
+  const handleJoinRoom = (room: Room) => {
     if (viewerRole === "teacher") {
       navigate(`/classroom/${room.id}`);
     } else {
@@ -171,7 +315,7 @@ export function CommunityPage() {
         <div className="w-8 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />
 
         {/* Communities */}
-        {COMMUNITIES.map((c) => (
+        {communities.map((c) => (
           <div key={c.id} className="relative">
             {c.unread > 0 && (
               <span
@@ -273,19 +417,19 @@ export function CommunityPage() {
                 community.type === "private"
                   ? "rgba(239,68,68,0.15)"
                   : community.type === "school"
-                  ? "rgba(30,58,138,0.2)"
-                  : "rgba(5,150,105,0.15)",
+                    ? "rgba(30,58,138,0.2)"
+                    : "rgba(5,150,105,0.15)",
               color:
                 community.type === "private"
                   ? "#f87171"
                   : community.type === "school"
-                  ? "#93c5fd"
-                  : "#4ade80",
+                    ? "#93c5fd"
+                    : "#4ade80",
             }}
           >
             {community.type === "private" ? <Lock className="w-3 h-3" /> :
-             community.type === "school" ? <BookOpen className="w-3 h-3" /> :
-             <Globe className="w-3 h-3" />}
+              community.type === "school" ? <BookOpen className="w-3 h-3" /> :
+                <Globe className="w-3 h-3" />}
             {community.type.charAt(0).toUpperCase() + community.type.slice(1)}
           </span>
         </div>
@@ -304,7 +448,7 @@ export function CommunityPage() {
                 <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
               )}
             </div>
-            {CHANNELS.text.map((ch) => {
+            {channels.text.map((ch) => {
               const isLocked = ch.locked && viewerRole !== "teacher";
               return (
                 <button
@@ -351,7 +495,7 @@ export function CommunityPage() {
                 <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
               )}
             </div>
-            {CHANNELS.rooms.map((room) => (
+            {channels.rooms.map((room) => (
               <button
                 key={room.id}
                 onClick={() => handleJoinRoom(room)}
@@ -608,9 +752,9 @@ export function CommunityPage() {
               {/* Teachers */}
               <div className="px-3 mb-3">
                 <div className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-2" style={{ fontWeight: 600 }}>
-                  Teachers — {MEMBERS.filter(m => m.role === "teacher").length}
+                  Teachers — {members.filter(m => m.role === "teacher").length}
                 </div>
-                {MEMBERS.filter(m => m.role === "teacher" || m.role === "admin").map((m, i) => {
+                {members.filter(m => m.role === "teacher" || m.role === "admin").map((m, i) => {
                   const badge = roleBadge(m.role);
                   return (
                     <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
@@ -645,9 +789,9 @@ export function CommunityPage() {
               {/* Students */}
               <div className="px-3">
                 <div className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-2" style={{ fontWeight: 600 }}>
-                  Students — {MEMBERS.filter(m => m.role === "student").length}
+                  Students — {members.filter(m => m.role === "student").length}
                 </div>
-                {MEMBERS.filter(m => m.role === "student").map((m, i) => {
+                {members.filter(m => m.role === "student").map((m, i) => {
                   const badge = roleBadge(m.role);
                   return (
                     <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
@@ -703,6 +847,8 @@ export function CommunityPage() {
             <div className="mb-4">
               <label className="block text-xs text-gray-400 mb-1.5" style={{ fontWeight: 600 }}>Community Name</label>
               <input
+                value={newCommName}
+                onChange={(e) => setNewCommName(e.target.value)}
                 placeholder="e.g. SS2 Science Hub"
                 className="w-full px-4 py-3 rounded-xl text-sm outline-none"
                 style={{ background: "rgba(255,255,255,0.07)", color: "white", border: "1px solid rgba(255,255,255,0.1)" }}
@@ -718,8 +864,9 @@ export function CommunityPage() {
                 ].map((t) => (
                   <button
                     key={t.label}
+                    onClick={() => setNewCommType(t.label.toLowerCase() as any)}
                     className="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs border transition-all"
-                    style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}
+                    style={{ borderColor: newCommType === t.label.toLowerCase() ? t.color : "rgba(255,255,255,0.1)", color: newCommType === t.label.toLowerCase() ? "white" : "rgba(255,255,255,0.6)", background: newCommType === t.label.toLowerCase() ? `${t.color}20` : "transparent" }}
                   >
                     <span style={{ color: t.color }}>{t.icon}</span>
                     {t.label}
@@ -736,7 +883,7 @@ export function CommunityPage() {
                 Cancel
               </button>
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={createCommunity}
                 className="flex-1 py-2.5 rounded-xl text-white text-sm"
                 style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
               >
@@ -762,6 +909,8 @@ export function CommunityPage() {
             <h2 className="text-white mb-1" style={{ fontWeight: 800 }}>Join with Code</h2>
             <p className="text-sm text-gray-400 mb-5">Enter an invite code to join a community.</p>
             <input
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
               placeholder="e.g. COMM-XY91"
               className="w-full px-4 py-3 rounded-xl text-sm outline-none mb-4 text-center tracking-widest"
               style={{
@@ -781,7 +930,7 @@ export function CommunityPage() {
                 Cancel
               </button>
               <button
-                onClick={() => setShowJoinModal(false)}
+                onClick={joinCommunity}
                 className="flex-1 py-2.5 rounded-xl text-white text-sm"
                 style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
               >
