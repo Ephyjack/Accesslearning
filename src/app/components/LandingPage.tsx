@@ -1,10 +1,10 @@
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Globe,
   Mic,
   FileText,
   Users,
-  Accessibility,
   Sparkles,
   Play,
   ChevronRight,
@@ -12,6 +12,10 @@ import {
   Languages,
   BrainCircuit,
   GraduationCap,
+  Radio,
+  Check,
+  Menu,
+  X,
 } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 
@@ -36,10 +40,10 @@ const features = [
     color: "#2563eb",
   },
   {
-    icon: <Accessibility className="w-6 h-6" />,
-    title: "Sign Language Interpreter",
+    icon: <Radio className="w-6 h-6" />,
+    title: "Learning Communities",
     description:
-      "An AI avatar provides sign language interpretation in real time for students who are deaf or hard of hearing.",
+      "Create public, private, or school communities with channels, live rooms, and member management — all in one place.",
     color: "#059669",
   },
   {
@@ -84,7 +88,7 @@ const testimonials = [
     name: "Yuki Tanaka",
     role: "Graduate Student",
     avatar: "YT",
-    text: "As a deaf student, I've always struggled with online classes. The sign language interpreter changes everything. I finally feel included.",
+    text: "The community feature is incredible. I joined study groups from three different countries and we collaborate in real time — translation just works.",
     color: "#2563eb",
   },
   {
@@ -96,8 +100,75 @@ const testimonials = [
   },
 ];
 
+const pricingPlans = [
+  {
+    name: "Free",
+    price: "$0",
+    period: "forever",
+    description: "Perfect for individual teachers getting started.",
+    color: "#1e3a8a",
+    features: [
+      "Up to 3 active classrooms",
+      "30 students per class",
+      "Real-time translation (5 languages)",
+      "Live transcripts",
+      "Community access",
+    ],
+    cta: "Get Started Free",
+    highlight: false,
+  },
+  {
+    name: "Pro",
+    price: "$12",
+    period: "per month",
+    description: "For serious educators with growing classrooms.",
+    color: "#7c3aed",
+    features: [
+      "Unlimited classrooms",
+      "Unlimited students",
+      "Translation in 50+ languages",
+      "Searchable transcript archive",
+      "Private communities & rooms",
+      "Priority support",
+    ],
+    cta: "Start Pro Trial",
+    highlight: true,
+  },
+  {
+    name: "School",
+    price: "$49",
+    period: "per month",
+    description: "For institutions and admin-managed deployments.",
+    color: "#059669",
+    features: [
+      "Everything in Pro",
+      "Admin dashboard",
+      "School-wide communities",
+      "Advanced analytics",
+      "Dedicated onboarding",
+      "SLA & custom contracts",
+    ],
+    cta: "Contact Us",
+    highlight: false,
+  },
+];
+
 export function LandingPage() {
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const scrollTo = (id: string) => {
+    setMobileMenuOpen(false);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const navLinks = [
+    { label: "Features", id: "features" },
+    { label: "How It Works", id: "how-it-works" },
+    { label: "Pricing", id: "pricing" },
+    { label: "About", id: "about" },
+  ];
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -114,25 +185,25 @@ export function LandingPage() {
             >
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span
-              className="text-xl"
-              style={{ fontWeight: 700, color: "#0f172a" }}
-            >
+            <span className="text-xl" style={{ fontWeight: 700, color: "#0f172a" }}>
               Access<span style={{ color: "#7c3aed" }}>Learn</span>
             </span>
           </div>
+
+          {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-8">
-            {["Features", "How It Works", "Pricing", "About"].map((item) => (
-              <a
-                key={item}
-                href="#"
+            {navLinks.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => scrollTo(item.id)}
                 className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
               >
-                {item}
-              </a>
+                {item.label}
+              </button>
             ))}
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="hidden md:flex items-center gap-3">
             <button
               onClick={() => navigate("/auth")}
               className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
@@ -147,7 +218,45 @@ export function LandingPage() {
               Get Started
             </button>
           </div>
+
+          {/* Mobile hamburger */}
+          <button
+            className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
+          </button>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-100 bg-white px-6 py-4 flex flex-col gap-3">
+            {navLinks.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => scrollTo(item.id)}
+                className="text-sm text-gray-600 hover:text-gray-900 text-left py-1.5 transition-colors"
+              >
+                {item.label}
+              </button>
+            ))}
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => navigate("/auth")}
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Log In
+              </button>
+              <button
+                onClick={() => navigate("/auth")}
+                className="flex-1 px-4 py-2 text-sm rounded-lg text-white transition-all hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #7c3aed 100%)" }}
+              >
+                Get Started
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
@@ -199,8 +308,8 @@ export function LandingPage() {
                 style={{ fontSize: "1.125rem", color: "#475569", lineHeight: 1.7 }}
               >
                 Access Learn uses AI to translate lectures in real time, generate
-                searchable transcripts, and assist students globally — regardless of
-                language or hearing ability.
+                searchable transcripts, and connect students globally — regardless of
+                language or location.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <button
@@ -284,9 +393,7 @@ export function LandingPage() {
                   </div>
                   <span className="text-xs font-medium text-gray-500">AI Translation</span>
                 </div>
-                <p className="text-xs text-gray-800 mb-1">
-                  "The cell divides in two..."
-                </p>
+                <p className="text-xs text-gray-800 mb-1">"The cell divides in two..."</p>
                 <p className="text-xs" style={{ color: "#7c3aed" }}>
                   "细胞分裂成两个..."
                 </p>
@@ -329,13 +436,13 @@ export function LandingPage() {
                 )}
               </div>
 
-              {/* Floating accessibility pill */}
+              {/* Floating community pill */}
               <div
                 className="absolute right-4 top-6 rounded-full px-3 py-2 flex items-center gap-2 shadow-lg"
-                style={{ background: "#1e3a8a" }}
+                style={{ background: "#059669" }}
               >
-                <Accessibility className="w-4 h-4 text-white" />
-                <span className="text-xs text-white">ASL Active</span>
+                <Radio className="w-4 h-4 text-white" />
+                <span className="text-xs text-white">Community Live</span>
               </div>
             </div>
           </div>
@@ -359,7 +466,7 @@ export function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-24 bg-gray-50">
+      <section id="features" className="py-24 bg-gray-50" style={{ scrollMarginTop: 72 }}>
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
             <span
@@ -376,7 +483,7 @@ export function LandingPage() {
             </h2>
             <p className="mt-3 text-gray-500 max-w-xl mx-auto">
               Powered by cutting-edge AI, Access Learn handles translation, transcription,
-              and accessibility — so you can focus on teaching.
+              communities, and collaboration — so you can focus on teaching.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -403,7 +510,7 @@ export function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-24 bg-white">
+      <section id="how-it-works" className="py-24 bg-white" style={{ scrollMarginTop: 72 }}>
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col lg:flex-row items-center gap-16">
             <div className="flex-1">
@@ -472,9 +579,7 @@ export function LandingPage() {
                 style={{ background: "white", border: "1px solid #f1f5f9", maxWidth: 220 }}
               >
                 <div className="text-xs text-gray-400 mb-1">Students online now</div>
-                <div
-                  style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1e3a8a" }}
-                >
+                <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1e3a8a" }}>
                   2,841
                 </div>
                 <div className="flex gap-1 mt-2">
@@ -496,7 +601,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-14">
             <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "#0f172a" }}>
-              Loved by educators & students worldwide
+              Loved by educators &amp; students worldwide
             </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
@@ -528,6 +633,152 @@ export function LandingPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 bg-white" style={{ scrollMarginTop: 72 }}>
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <span
+              className="text-sm px-3 py-1 rounded-full"
+              style={{ background: "rgba(124,58,237,0.1)", color: "#7c3aed" }}
+            >
+              Pricing
+            </span>
+            <h2
+              className="mt-4"
+              style={{ fontSize: "2.25rem", fontWeight: 800, color: "#0f172a" }}
+            >
+              Simple, transparent pricing
+            </h2>
+            <p className="mt-3 text-gray-500 max-w-md mx-auto">
+              Start free, upgrade when you're ready. No hidden fees.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6 items-start">
+            {pricingPlans.map((plan) => (
+              <div
+                key={plan.name}
+                className="rounded-2xl p-8 relative"
+                style={{
+                  border: plan.highlight ? `2px solid ${plan.color}` : "1px solid #f1f5f9",
+                  background: plan.highlight ? `${plan.color}06` : "white",
+                  boxShadow: plan.highlight ? `0 8px 32px ${plan.color}20` : "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                {plan.highlight && (
+                  <div
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs text-white"
+                    style={{ background: plan.color, fontWeight: 700 }}
+                  >
+                    Most Popular
+                  </div>
+                )}
+                <div className="mb-6">
+                  <div className="text-sm font-semibold mb-1" style={{ color: plan.color }}>
+                    {plan.name}
+                  </div>
+                  <div className="flex items-end gap-1">
+                    <span style={{ fontSize: "2.5rem", fontWeight: 800, color: "#0f172a" }}>
+                      {plan.price}
+                    </span>
+                    <span className="text-gray-400 text-sm mb-2">/{plan.period}</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">{plan.description}</p>
+                </div>
+                <ul className="space-y-3 mb-8">
+                  {plan.features.map((feat, i) => (
+                    <li key={i} className="flex items-start gap-2.5 text-sm text-gray-600">
+                      <Check className="w-4 h-4 shrink-0 mt-0.5" style={{ color: plan.color }} />
+                      {feat}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => navigate("/auth")}
+                  className="w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                  style={{
+                    background: plan.highlight
+                      ? `linear-gradient(135deg, #1e3a8a 0%, ${plan.color} 100%)`
+                      : "transparent",
+                    color: plan.highlight ? "white" : plan.color,
+                    border: plan.highlight ? "none" : `2px solid ${plan.color}`,
+                  }}
+                >
+                  {plan.cta}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="py-24" style={{ background: "#f8faff", scrollMarginTop: 72 }}>
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col lg:flex-row items-center gap-16">
+            <div className="flex-1">
+              <span
+                className="text-sm px-3 py-1 rounded-full"
+                style={{ background: "rgba(5,150,105,0.1)", color: "#059669" }}
+              >
+                About Us
+              </span>
+              <h2
+                className="mt-4 mb-6"
+                style={{ fontSize: "2.25rem", fontWeight: 800, color: "#0f172a" }}
+              >
+                Built to make education borderless
+              </h2>
+              <p className="text-gray-500 leading-relaxed mb-4">
+                Access Learn was born from a simple belief: the language you speak shouldn't
+                limit what you can learn. We built a platform where teachers anywhere can
+                connect with students everywhere — in real time, in their own language.
+              </p>
+              <p className="text-gray-500 leading-relaxed mb-8">
+                Our AI runs silently in the background — translating, transcribing, and
+                enabling communities — so teachers can focus on what they do best: teaching.
+              </p>
+              <div className="grid grid-cols-2 gap-6">
+                {[
+                  { label: "Founded", value: "2024" },
+                  { label: "Team Size", value: "12 people" },
+                  { label: "Mission", value: "Education for all" },
+                  { label: "HQ", value: "Lagos & Remote" },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">{item.label}</div>
+                    <div className="text-sm font-semibold text-gray-900">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex-1">
+              <div
+                className="rounded-2xl p-8"
+                style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #4c1d95 100%)" }}
+              >
+                <div className="text-white mb-6" style={{ fontWeight: 700, fontSize: "1.15rem" }}>
+                  Our core values
+                </div>
+                {[
+                  { emoji: "🌍", title: "Inclusivity", desc: "No student left behind because of language." },
+                  { emoji: "⚡", title: "Speed", desc: "Real-time AI with under 300ms translation latency." },
+                  { emoji: "🔒", title: "Privacy", desc: "Your classroom data never trains our models." },
+                  { emoji: "🤝", title: "Community", desc: "Learning is better together — in any language." },
+                ].map((v) => (
+                  <div key={v.title} className="flex gap-4 mb-5">
+                    <span className="text-2xl">{v.emoji}</span>
+                    <div>
+                      <div className="text-white text-sm font-semibold">{v.title}</div>
+                      <div className="text-blue-300 text-xs mt-0.5">{v.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
