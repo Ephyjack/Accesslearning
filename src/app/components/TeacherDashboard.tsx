@@ -29,7 +29,7 @@ import {
   Hash,
   Lock,
   Trash2,
-  Menu, X
+  Menu, X, Circle
 } from "lucide-react";
 import {
   AreaChart,
@@ -74,6 +74,8 @@ export function TeacherDashboard() {
   const [joinCode, setJoinCode] = useState("");
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [preferredLang, setPreferredLang] = useState("English");
+  const [roomStatuses, setRoomStatuses] = useState<Record<string, string>>({});
+  const [showJoinRoomModal, setShowJoinRoomModal] = useState<any>(null);
 
 
   const handleCreateClass = async () => {
@@ -178,6 +180,34 @@ export function TeacherDashboard() {
     setShowJoinModal(false);
     navigate(`/classroom/${joinCode}?lang=${preferredLang}`);
   };
+
+  const handleRoomAction = (room: any) => {
+    if (!room.is_private || room.teacher_id === profile.id) {
+      navigate(`/classroom/${room.id}`);
+      return;
+    }
+    const status = roomStatuses[room.id];
+    if (status === "approved") {
+      navigate(`/classroom/${room.id}`);
+    } else if (status === "pending") {
+      // already pending - do nothing
+    } else {
+      setShowJoinRoomModal(room);
+    }
+  };
+
+  const sendRoomRequest = async () => {
+    if (showJoinRoomModal && profile) {
+      await supabase.from("room_requests").insert({
+        class_id: showJoinRoomModal.id,
+        student_id: profile.id,
+        status: "pending",
+      });
+      setRoomStatuses(prev => ({ ...prev, [showJoinRoomModal.id]: "pending" }));
+    }
+    setShowJoinRoomModal(null);
+  };
+
 
   // -----------------------
   // Engagement, assignments, communities
@@ -303,7 +333,6 @@ export function TeacherDashboard() {
       const { data, error } = await supabase
         .from("rooms")
         .select("*")
-        .eq("teacher_id", profile.id)
         .order("created_at", { ascending: false });
 
       if (error) console.error(error);
@@ -321,7 +350,6 @@ export function TeacherDashboard() {
           event: "*",
           schema: "public",
           table: "rooms",
-          filter: `teacher_id=eq.${profile.id}`,
         },
         (payload) => {
           fetchRooms(); // refresh rooms when any change occurs
@@ -354,7 +382,7 @@ export function TeacherDashboard() {
       } else if (clsData) {
         setClasses(clsData);
 
-        // Fetch pending requests for these classes
+        // Fetch pending requests for these classes (ones they created)
         const classIds = clsData.map(c => c.id);
         if (classIds.length > 0) {
           const { data: reqs } = await supabase
@@ -365,7 +393,28 @@ export function TeacherDashboard() {
 
           setPendingCount(reqs ? reqs.length : 0);
         }
+      } else {
+        setClasses([]);
       }
+
+      // Fetch joined classes as a student
+      const { data: approvedReqs } = await supabase
+        .from('room_requests')
+        .select('status, classes(*), class_id')
+        .eq('student_id', profile.id);
+
+      let allClasses = clsData || [];
+      if (approvedReqs) {
+        const activeEnrolled = approvedReqs
+          .filter(r => r.status === 'approved' && r.classes)
+          .map(r => r.classes);
+        allClasses = [...allClasses, ...activeEnrolled];
+
+        const rs: Record<string, string> = { ...roomStatuses };
+        approvedReqs.forEach(r => { if (r.class_id) rs[r.class_id] = r.status; });
+        setRoomStatuses(prev => ({ ...prev, ...rs }));
+      }
+      setClasses(allClasses);
     };
     fetchDashboardData();
   }, [profile]);
@@ -861,20 +910,22 @@ export function TeacherDashboard() {
                     </div>
 
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleDeleteClass(cls.id)}
-                        className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-red-50"
-                        style={{ border: "1px solid #fecaca", color: "#ef4444" }}
-                      >
-                        Delete
-                      </button>
+                      {cls.teacher_id === profile?.id && (
+                        <button
+                          onClick={() => handleDeleteClass(cls.id)}
+                          className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-red-50"
+                          style={{ border: "1px solid #fecaca", color: "#ef4444" }}
+                        >
+                          Delete
+                        </button>
+                      )}
                       <button
                         onClick={() => navigate(`/classroom/${cls.code}`)}
                         className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 transition-all hover:opacity-90"
                         style={{ background: cls.color || '#1e3a8a' }}
                       >
                         <Video className="w-3.5 h-3.5" />
-                        Start Class
+                        {cls.teacher_id === profile?.id ? "Start Class" : "Enter Class"}
                       </button>
                     </div>
                   </div>
@@ -955,7 +1006,7 @@ export function TeacherDashboard() {
                     </div>
 
                     <div className="flex gap-2">
-                      {room.pendingCount > 0 && (
+                      {room.teacher_id === profile?.id && room.pendingCount > 0 && (
                         <button
                           onClick={() => setShowAccessModal(true)}
                           className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
@@ -968,26 +1019,42 @@ export function TeacherDashboard() {
                           Requests
                         </button>
                       )}
-                      <button
-                        onClick={() => navigate(`/classroom/${room.id}`)}
-                        className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90"
-                        style={{
-                          background: room.live ? "#16a34a" : "#1e3a8a",
-                        }}
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                        {room.live ? "Enter Room" : "Start Class"}
-                      </button>
-                      <button
-                        className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-red-50 transition-colors"
-                        onClick={() => handleDeleteRoom(room.id)}
-                        style={{
-                          border: "1px solid #fecaca",
-                          color: "#ef4444",
-                        }}
-                      >
-                        Delete
-                      </button>
+                      {room.teacher_id === profile?.id ? (
+                        <>
+                          <button
+                            onClick={() => navigate(`/classroom/${room.id}`)}
+                            className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90"
+                            style={{ background: room.live ? "#16a34a" : "#1e3a8a" }}
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            {room.live ? "Enter Room" : "Start Class"}
+                          </button>
+                          <button
+                            className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-red-50 transition-colors"
+                            onClick={() => handleDeleteRoom(room.id)}
+                            style={{ border: "1px solid #fecaca", color: "#ef4444" }}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {roomStatuses[room.id] === "pending" ? (
+                            <button disabled className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5" style={{ background: "rgba(251,191,36,0.15)", color: "#d97706" }}>
+                              <Radio className="w-3.5 h-3.5" /> Pending
+                            </button>
+                          ) : roomStatuses[room.id] === "approved" ? (
+                            <button onClick={() => navigate(`/classroom/${room.id}`)} className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90" style={{ background: "#16a34a" }}>
+                              <Video className="w-3.5 h-3.5" /> Enter Room
+                            </button>
+                          ) : (
+                            <button onClick={() => handleRoomAction(room)} className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90" style={{ background: room.is_private ? "#7c3aed" : "#1e3a8a" }}>
+                              {room.is_private ? <Lock className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+                              {room.is_private ? "Request to Join" : "Join Room"}
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1304,6 +1371,28 @@ export function TeacherDashboard() {
                 <div className="flex gap-3">
                   <button onClick={() => setShowJoinModal(false)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
                   <button onClick={handleJoinClassRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Join Classroom</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Private Room Join Request Modal */}
+          {showJoinRoomModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowJoinRoomModal(null)}>
+              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+                  <Radio className="w-7 h-7" />
+                </div>
+                <h2 className="mb-1" style={{ fontWeight: 800, color: "#0f172a" }}>Request to Join</h2>
+                <p className="text-sm" style={{ color: "#7c3aed", fontWeight: 600 }}>{showJoinRoomModal.name}</p>
+                <p className="text-sm text-gray-400 mt-1 mb-5">Your request will be sent to the host. You'll be admitted once approved.</p>
+                <div className="flex items-center gap-3 rounded-xl p-3 mb-5" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+                  <Circle className="w-4 h-4 text-yellow-500" />
+                  <span className="text-xs text-yellow-700">Status will show as: Pending Approval</span>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowJoinRoomModal(null)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
+                  <button onClick={sendRoomRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Send Request</button>
                 </div>
               </div>
             </div>
