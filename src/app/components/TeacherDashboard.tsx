@@ -68,6 +68,14 @@ export function TeacherDashboard() {
   const [newRoomLang, setNewRoomLang] = useState("English");
   const [newRoomPrivate, setNewRoomPrivate] = useState(false);
 
+  // -----------------------
+  // Join Class
+  // -----------------------
+  const [joinCode, setJoinCode] = useState("");
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [preferredLang, setPreferredLang] = useState("English");
+
+
   const handleCreateClass = async () => {
     if (!newClassName.trim() || !profile) return;
 
@@ -140,6 +148,35 @@ export function TeacherDashboard() {
     } else {
       alert("Failed to delete room.");
     }
+  };
+
+  const handleJoinClassRequest = async () => {
+    if (!joinCode.trim() || !profile) return;
+
+    // Find class by code
+    const { data: clsData, error: clsError } = await supabase
+      .from('classes')
+      .select('id')
+      .eq('code', joinCode)
+      .single();
+
+    if (clsError || !clsData) {
+      alert("Class not found! Please check the code.");
+      return;
+    }
+
+    // Insert request
+    const { error: reqError } = await supabase
+      .from('room_requests')
+      .insert({ class_id: clsData.id, student_id: profile.id, status: 'pending' });
+
+    if (reqError && reqError.code !== '23505') { // Ignore unique constraint if user already requested
+      alert("Failed to send request.");
+      return;
+    }
+
+    setShowJoinModal(false);
+    navigate(`/classroom/${joinCode}?lang=${preferredLang}`);
   };
 
   // -----------------------
@@ -579,6 +616,19 @@ export function TeacherDashboard() {
                   style={{ background: "#ef4444" }}
                 />
               )}
+            </button>
+
+            {/* Join Classroom */}
+            <button
+              onClick={() => setShowJoinModal(true)}
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90"
+              style={{
+                background: "linear-gradient(135deg, #10b981, #059669)",
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Join Class</span>
+              <span className="sm:hidden">Join</span>
             </button>
 
             {/* Create Classroom */}
@@ -1224,6 +1274,36 @@ export function TeacherDashboard() {
                   >
                     Create Room
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Join Class Modal */}
+          {showJoinModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowJoinModal(false)}>
+              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
+                  <Users className="w-7 h-7" />
+                </div>
+                <h2 className="mb-1" style={{ fontWeight: 800, color: "#0f172a" }}>Join a Classroom</h2>
+                <p className="text-sm text-gray-400 mb-6">Enter the class code your student or teacher shared with you.</p>
+                <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="e.g. BIO-4821" className="w-full px-4 py-3 rounded-xl border text-sm outline-none mb-3 text-center tracking-widest" style={{ borderColor: "#e2e8f0", fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.15em" }} />
+                <div className="mb-4">
+                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Preferred Language</label>
+                  <select value={preferredLang} onChange={(e) => setPreferredLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                    <option value="English">🇺🇸 English</option>
+                    <option value="Japanese">🇯🇵 Japanese</option>
+                    <option value="Spanish">🇪🇸 Spanish</option>
+                    <option value="French">🇫🇷 French</option>
+                    <option value="Portuguese">🇧🇷 Portuguese</option>
+                    <option value="German">🇩🇪 German</option>
+                    <option value="Mandarin">🇨🇳 Mandarin</option>
+                  </select>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowJoinModal(false)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
+                  <button onClick={handleJoinClassRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Join Classroom</button>
                 </div>
               </div>
             </div>

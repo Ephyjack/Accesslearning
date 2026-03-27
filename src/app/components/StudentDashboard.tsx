@@ -16,6 +16,14 @@ export function StudentDashboard() {
   const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "assignments" | "recordings" | "communities">("classes");
   const [preferredLang, setPreferredLang] = useState("English");
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
+  const [newClassName, setNewClassName] = useState("");
+  const [newClassLang, setNewClassLang] = useState("English");
+  const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomLang, setNewRoomLang] = useState("English");
+  const [newRoomPrivate, setNewRoomPrivate] = useState(false);
+
   // User details
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -125,6 +133,57 @@ export function StudentDashboard() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
+  };
+
+  const handleCreateClass = async () => {
+    if (!newClassName.trim() || !profile) return;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { data, error } = await supabase
+      .from("classes")
+      .insert({
+        name: newClassName,
+        code: code,
+        language: newClassLang,
+        teacher_id: profile.id, // we still use profile.id as the creator
+        status: "active",
+        students_count: 0
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("Failed to create class: " + error.message);
+      return;
+    }
+
+    setShowCreateModal(false);
+    navigate(`/classroom/${code}`);
+  };
+
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim() || !profile) return;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const { data, error } = await supabase.from("rooms").insert({
+      name: newRoomName,
+      code,
+      language: newRoomLang,
+      teacher_id: profile.id,
+      is_private: newRoomPrivate,
+      status: "offline",
+    }).select().single();
+    if (error) {
+      alert("Failed to create room: " + error.message);
+      return;
+    }
+    if (data) {
+      setRooms(prev => [data, ...prev]);
+      setNewRoomName("");
+      setNewRoomLang("English");
+      setNewRoomPrivate(false);
+      setShowCreateRoomModal(false);
+      navigate(`/classroom/${data.id}`);
+    }
   };
 
   const handleJoinClassRequest = async () => {
@@ -278,7 +337,12 @@ export function StudentDashboard() {
               <Bell className="w-5 h-5 text-gray-500" />
               {assignments.length > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />}
             </button>
-            <button onClick={() => setShowJoinModal(true)} className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>
+            <button onClick={() => setShowCreateModal(true)} className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90 mr-2" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Create Class</span>
+              <span className="sm:hidden">Create</span>
+            </button>
+            <button onClick={() => setShowJoinModal(true)} className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90" style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}>
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Join Class</span>
               <span className="sm:hidden">Join</span>
@@ -303,22 +367,36 @@ export function StudentDashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 rounded-xl mb-6 w-full max-w-full overflow-x-auto" style={{ background: "#f1f5f9", scrollbarWidth: "none" }}>
-          {(["classes", "rooms", "assignments", "recordings", "communities"] as const).map((tab) => (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6 w-full max-w-full">
+          <div className="flex gap-1 p-1 rounded-xl w-full sm:w-auto overflow-x-auto" style={{ background: "#f1f5f9", scrollbarWidth: "none" }}>
+            {(["classes", "rooms", "assignments", "recordings", "communities"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="px-4 py-2 rounded-lg text-sm capitalize transition-all shrink-0"
+                style={{
+                  background: activeTab === tab ? "white" : "transparent",
+                  color: activeTab === tab ? "#0f172a" : "#64748b",
+                  fontWeight: activeTab === tab ? 600 : 400,
+                  boxShadow: activeTab === tab ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          {activeTab === "rooms" && (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className="px-4 py-2 rounded-lg text-sm capitalize transition-all shrink-0"
+              onClick={() => setShowCreateRoomModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm hover:opacity-90 transition-all shrink-0"
               style={{
-                background: activeTab === tab ? "white" : "transparent",
-                color: activeTab === tab ? "#0f172a" : "#64748b",
-                fontWeight: activeTab === tab ? 600 : 400,
-                boxShadow: activeTab === tab ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                background: "linear-gradient(135deg, #1e3a8a, #7c3aed)",
               }}
             >
-              {tab}
+              <Plus className="w-4 h-4" />
+              New Room
             </button>
-          ))}
+          )}
         </div>
 
         {/* Tab Content */}
@@ -502,6 +580,121 @@ export function StudentDashboard() {
             <div className="flex gap-3">
               <button onClick={() => setShowJoinRoomModal(null)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
               <button onClick={sendRoomRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Send Request</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Classroom Modal */}
+      {showCreateModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowCreateModal(false)}
+        >
+          <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create New Classroom</h2>
+            <p className="text-sm text-gray-400 mb-6">Others will join using the auto-generated class code.</p>
+            <div className="mb-4">
+              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Class Name</label>
+              <input
+                value={newClassName}
+                onChange={(e) => setNewClassName(e.target.value)}
+                placeholder="e.g. Introduction to Chemistry"
+                className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
+                style={{ borderColor: "#e2e8f0" }}
+              />
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Primary Language</label>
+              <select value={newClassLang} onChange={(e) => setNewClassLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                <option>English</option>
+                <option>Spanish</option>
+                <option>French</option>
+                <option>Mandarin</option>
+              </select>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 py-3 rounded-xl border text-sm"
+                style={{ borderColor: "#e2e8f0", color: "#64748b" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateClass}
+                className="flex-1 py-3 rounded-xl text-white text-sm"
+                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+              >
+                Create & Open
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Room Modal */}
+      {showCreateRoomModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowCreateRoomModal(false)}
+        >
+          <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+              <Video className="w-6 h-6" />
+            </div>
+            <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create Online Room</h2>
+            <p className="text-sm text-gray-400 mb-6">A persistent room where others can request to join.</p>
+            <div className="mb-4">
+              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Room Name</label>
+              <input
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                placeholder="e.g. Biology Study Room"
+                className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
+                style={{ borderColor: "#e2e8f0" }}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Language</label>
+              <select value={newRoomLang} onChange={(e) => setNewRoomLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="Mandarin">Mandarin</option>
+                <option value="Japanese">Japanese</option>
+              </select>
+            </div>
+            <div className="mb-6 flex items-center gap-3">
+              <button
+                onClick={() => setNewRoomPrivate(!newRoomPrivate)}
+                className="w-10 h-6 rounded-full transition-colors relative shrink-0"
+                style={{ background: newRoomPrivate ? "#7c3aed" : "#e2e8f0" }}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                  style={{ left: newRoomPrivate ? "calc(100% - 1.35rem)" : "0.125rem" }}
+                />
+              </button>
+              <span className="text-sm text-gray-600">Private room (others need approval to join)</span>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCreateRoomModal(false)}
+                className="flex-1 py-3 rounded-xl border text-sm"
+                style={{ borderColor: "#e2e8f0", color: "#64748b" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateRoom}
+                className="flex-1 py-3 rounded-xl text-white text-sm"
+                style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+              >
+                Create Room
+              </button>
             </div>
           </div>
         </div>
