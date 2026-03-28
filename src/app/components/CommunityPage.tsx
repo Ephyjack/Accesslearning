@@ -144,6 +144,9 @@ export function CommunityPage() {
   const [selectedLang, setSelectedLang] = useState("English");
   const [showLangDropdown, setShowLangDropdown] = useState(false);
 
+  const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
+  const [newChannelName, setNewChannelName] = useState("");
+
   useEffect(() => {
     const fetchInitialData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -443,6 +446,27 @@ export function CommunityPage() {
     }
   };
 
+  const handleCreateChannel = async () => {
+    if (!newChannelName.trim() || !sessionUser) return;
+    const { data, error } = await supabase.from("channels").insert({
+      name: newChannelName.toLowerCase().replace(/\s+/g, '-'),
+      community_id: activeCommunity,
+      type: "text"
+    }).select().single();
+
+    if (error) {
+      alert("Failed to create channel: " + error.message);
+      return;
+    }
+    if (data) {
+      const newCh: Channel = { id: data.id, name: data.name, locked: data.is_locked, unread: 0 };
+      setChannels(prev => ({ ...prev, text: [...prev.text, newCh] }));
+      setNewChannelName("");
+      setShowCreateChannelModal(false);
+      setActiveChannel(data.id);
+    }
+  };
+
   const approveRequest = (idx: number) => {
     setJoinRequests((prev) => prev.filter((_, i) => i !== idx));
   };
@@ -468,7 +492,7 @@ export function CommunityPage() {
   };
 
   return (
-    <div className="h-screen flex overflow-hidden" style={{ background: "#0f172a" }}>
+    <div className="h-screen flex overflow-hidden" style={{ background: "linear-gradient(135deg, #09090b 0%, #181c25 100%)" }}>
       {/* Mobile Drawer Overlay */}
       {mobileMenuOpen && (
         <div
@@ -489,7 +513,7 @@ export function CommunityPage() {
         >
           {/* Home */}
           <button
-            onClick={() => navigate("/teacher")}
+            onClick={() => navigate(viewerRole === "student" ? "/student" : "/teacher")}
             className="w-10 h-10 rounded-2xl flex items-center justify-center hover:rounded-xl transition-all"
             style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
             title="Dashboard"
@@ -584,7 +608,8 @@ export function CommunityPage() {
         <div
           className="w-56 flex flex-col shrink-0"
           style={{
-            background: "#131d35",
+            background: "rgba(255,255,255,0.02)",
+            backdropFilter: "blur(12px)",
             borderRight: "1px solid rgba(255,255,255,0.05)",
           }}
         >
@@ -664,7 +689,7 @@ export function CommunityPage() {
                   Channels
                 </span>
                 {viewerRole === "teacher" && (
-                  <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
+                  <Plus onClick={() => setShowCreateChannelModal(true)} className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
                 )}
               </div>
               {channels.text.map((ch) => {
@@ -753,7 +778,7 @@ export function CommunityPage() {
           {/* User controls */}
           <div
             className="px-2 py-2"
-            style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "#0f1929" }}
+            style={{ borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.2)" }}
           >
             {/* Top row: avatar + name/role */}
             <div className="flex items-center gap-2 mb-1.5">
@@ -803,8 +828,8 @@ export function CommunityPage() {
       <div className="flex-1 flex flex-col min-w-0 w-full overflow-hidden">
         {/* Channel header */}
         <div
-          className="h-12 flex items-center justify-between px-3 md:px-5 shrink-0"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "#0f172a" }}
+          className="h-12 flex items-center justify-between px-3 md:px-5 shrink-0 relative z-10"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.2)", backdropFilter: "blur(10px)" }}
         >
           <div className="flex items-center gap-2">
             <button className="md:hidden p-1.5 rounded hover:bg-white/10 transition-colors mr-1 shrink-0" onClick={() => setMobileMenuOpen(true)}>
@@ -957,8 +982,8 @@ export function CommunityPage() {
           <div className={`${membersOpen ? 'fixed right-0 z-50 h-full shadow-2xl' : 'hidden'} lg:static lg:flex shrink-0 h-full`}>
             {showRequestsPanel && viewerRole === "teacher" ? (
               <div
-                className="w-72 shrink-0 flex flex-col h-full bg-[#0d1b30]"
-                style={{ borderLeft: "1px solid rgba(255,255,255,0.06)" }}
+                className="w-72 shrink-0 flex flex-col h-full"
+                style={{ background: "rgba(255,255,255,0.02)", backdropFilter: "blur(12px)", borderLeft: "1px solid rgba(255,255,255,0.08)" }}
               >
                 <div
                   className="px-4 py-3 flex items-center justify-between"
@@ -1022,8 +1047,8 @@ export function CommunityPage() {
             ) : (
               /* Members sidebar */
               <div
-                className="w-56 shrink-0 overflow-y-auto py-4 h-full bg-[#0d1b30]"
-                style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", scrollbarWidth: "thin" }}
+                className="w-56 shrink-0 overflow-y-auto py-4 h-full"
+                style={{ background: "rgba(255,255,255,0.02)", backdropFilter: "blur(12px)", borderLeft: "1px solid rgba(255,255,255,0.05)", scrollbarWidth: "thin" }}
               >
                 {/* Teachers */}
                 <div className="px-3 mb-3">
@@ -1036,10 +1061,14 @@ export function CommunityPage() {
                       <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
                         <div className="relative shrink-0">
                           <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
-                            style={{ background: badge.color, fontWeight: 700 }}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white overflow-hidden bg-gray-800"
+                            style={{ background: m.avatarUrl || m.avatar?.startsWith("http") ? "transparent" : badge.color, fontWeight: 700 }}
                           >
-                            {m.avatar}
+                            {m.avatarUrl || m.avatar?.startsWith("http") ? (
+                              <img src={m.avatarUrl || m.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                            ) : (
+                              m.avatar
+                            )}
                           </div>
                           <span
                             className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
@@ -1073,10 +1102,14 @@ export function CommunityPage() {
                       <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
                         <div className="relative shrink-0">
                           <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
-                            style={{ background: "rgba(255,255,255,0.12)", fontWeight: 700 }}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white overflow-hidden bg-gray-800"
+                            style={{ background: m.avatarUrl || m.avatar?.startsWith("http") ? "transparent" : "rgba(255,255,255,0.12)", fontWeight: 700 }}
                           >
-                            {m.avatar}
+                            {m.avatarUrl || m.avatar?.startsWith("http") ? (
+                              <img src={m.avatarUrl || m.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                            ) : (
+                              m.avatar
+                            )}
                           </div>
                           <span
                             className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-gray-900"
@@ -1106,6 +1139,15 @@ export function CommunityPage() {
       {/* Rooms quick card — shown as floating overlay when no requests panel */}
 
       {/* ── Modals ── */}
+      {showCreateChannelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }} onClick={() => setShowCreateChannelModal(false)}>
+          <div className="rounded-2xl p-7 shadow-2xl w-full max-w-sm flex flex-col" style={{ background: "rgba(30, 41, 59, 0.8)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.15)" }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-white mb-4" style={{ fontWeight: 800 }}>Create Channel</h2>
+            <input value={newChannelName} onChange={e => setNewChannelName(e.target.value)} placeholder="Channel name..." className="mb-4 px-4 py-3 rounded-xl text-sm outline-none text-white transition-all focus:border-violet-500" style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)" }} />
+            <button onClick={handleCreateChannel} className="py-3 rounded-xl text-white text-sm transition-all hover:opacity-90 shadow-xl" style={{ background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", fontWeight: 700 }}>Deploy Channel</button>
+          </div>
+        </div>
+      )}
 
       {/* Explore Communities */}
       {showExploreModal && (
