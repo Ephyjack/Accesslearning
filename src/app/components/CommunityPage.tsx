@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { supabase } from "./supabaseClient";
 import {
@@ -31,6 +31,13 @@ import {
   Trash2,
   Menu, X
 } from "lucide-react";
+import { translateTextWithOpenAI } from "../lib/openaiClient";
+
+const LANGUAGES = [
+  "English", "Japanese", "Spanish", "French", "Mandarin", "German",
+  "Portuguese", "Arabic", "Korean", "Hindi",
+];
+
 
 type Role = "teacher" | "student" | "admin";
 
@@ -76,6 +83,7 @@ export interface Message {
   avatar: string;
   time: string;
   text: string;
+  translated_text?: string;
   color: string;
 }
 
@@ -132,6 +140,9 @@ export function CommunityPage() {
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomLang, setNewRoomLang] = useState("English");
   const [newRoomPrivate, setNewRoomPrivate] = useState(false);
+
+  const [selectedLang, setSelectedLang] = useState("English");
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -224,6 +235,27 @@ export function CommunityPage() {
     fetchChannelsAndMembers();
   }, [activeCommunity]);
 
+  const langRef = useRef(selectedLang);
+
+  useEffect(() => {
+    langRef.current = selectedLang;
+    const retranslate = async () => {
+      if (!selectedLang || selectedLang === "English") return;
+
+      const recentMsgs = messages.slice(-15).filter(m => !m.translated_text || m.translated_text.includes("Failed"));
+      for (const m of recentMsgs) {
+        const translated = await translateTextWithOpenAI(m.text, selectedLang);
+        if (translated) {
+          setMessages(prev => prev.map(p => p.id === m.id ? { ...p, translated_text: translated } : p));
+        }
+      }
+    };
+
+    if (messages.length > 0) {
+      retranslate();
+    }
+  }, [selectedLang]);
+
   useEffect(() => {
     if (!activeChannel) return;
     const fetchMessages = async () => {
@@ -244,12 +276,21 @@ export function CommunityPage() {
     fetchMessages();
 
     const channel = supabase.channel(`messages:${activeChannel}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${activeChannel}` }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${activeChannel}` }, async (payload) => {
         const m = payload.new;
+
+        let trans = undefined;
+        if (langRef.current && langRef.current !== "English") {
+          const translated = await translateTextWithOpenAI(m.text, langRef.current);
+          if (translated && !translated.includes("Translation Failed")) {
+            trans = translated;
+          }
+        }
+
         setMessages(prev => [...prev, {
           id: m.id, userId: m.user_id, user: m.user_name || "User", role: "student",
           time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          text: m.text, avatar: m.user_name?.substring(0, 2).toUpperCase() || "US", color: "#7c3aed"
+          text: m.text, translated_text: trans, avatar: m.user_name?.substring(0, 2).toUpperCase() || "US", color: "#7c3aed"
         }]);
       })
       .subscribe();
@@ -796,6 +837,24 @@ export function CommunityPage() {
                 <span className="sm:hidden">{joinRequests.length}</span>
               </button>
             )}
+
+            <div className="relative shrink-0 flex items-center">
+              <button onClick={() => setShowLangDropdown(!showLangDropdown)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/10" style={{ color: "rgba(255,255,255,0.7)" }}>
+                <Globe className="w-3.5 h-3.5 text-violet-400" />
+                <span className="hidden sm:inline">{selectedLang}</span>
+                <ChevronDown className="w-3 h-3 text-gray-500" />
+              </button>
+              {showLangDropdown && (
+                <div className="absolute top-full mt-2 right-0 rounded-xl shadow-xl z-50 overflow-hidden py-1 w-36" style={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {LANGUAGES.map((lang) => (
+                    <button key={lang} onClick={() => { setSelectedLang(lang); setShowLangDropdown(false); }} className="w-full text-left px-4 py-2 text-xs transition-colors hover:bg-white/5" style={{ color: lang === selectedLang ? "#a78bfa" : "rgba(255,255,255,0.7)" }}>
+                      {lang}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button className="hidden sm:block p-1.5 rounded hover:bg-white/10 transition-colors shrink-0">
               <Search className="w-4 h-4 text-gray-400" />
             </button>
@@ -846,7 +905,7 @@ export function CommunityPage() {
                         <span className="text-xs text-gray-600">{msg.time}</span>
                       </div>
                       <p className="text-sm" style={{ color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>
-                        {msg.text}
+                        {(selectedLang !== "English" && msg.translated_text) ? msg.translated_text : msg.text}
                       </p>
                     </div>
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">

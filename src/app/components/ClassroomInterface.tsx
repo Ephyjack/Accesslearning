@@ -30,6 +30,7 @@ interface Message {
   room_id: string;
   user_name: string;
   text: string;
+  translated_text?: string;
   created_at: string;
   user_id?: string;
 }
@@ -261,17 +262,24 @@ export function ClassroomInterface() {
         if (!selectedLang || selectedLang === "English") return;
 
         // Take the last 15 un-translated messages to save API hits but feel instant
-        const recent = transcripts.slice(-15).filter(t => !t.translated_text || t.translated_text.includes("Failed"));
-
-        for (const t of recent) {
+        const recentTrans = transcripts.slice(-15).filter(t => !t.translated_text || t.translated_text.includes("Failed"));
+        for (const t of recentTrans) {
           const translated = await translateTextWithOpenAI(t.text, selectedLang);
           if (translated) {
             setTranscripts(prev => prev.map(p => p.id === t.id ? { ...p, translated_text: translated } : p));
           }
         }
+
+        const recentMsgs = messages.slice(-15).filter(m => !m.translated_text || m.translated_text.includes("Failed"));
+        for (const m of recentMsgs) {
+          const translated = await translateTextWithOpenAI(m.text, selectedLang);
+          if (translated) {
+            setMessages(prev => prev.map(p => p.id === m.id ? { ...p, translated_text: translated } : p));
+          }
+        }
       };
 
-      if (transcripts.length > 0) {
+      if (transcripts.length > 0 || messages.length > 0) {
         retranslate();
       }
     }, [selectedLang]);
@@ -296,8 +304,17 @@ export function ClassroomInterface() {
       };
       fetchInitialData();
 
-      const messagesSub = supabase.channel("messages_channel").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload: any) => {
-        if (payload.new.room_id === classData.id) setMessages(prev => [...prev, payload.new as Message]);
+      const messagesSub = supabase.channel("messages_channel").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async (payload: any) => {
+        if (payload.new.room_id === classData.id) {
+          setMessages(prev => [...prev, payload.new as Message]);
+
+          if (langRef.current && langRef.current !== "English") {
+            const translated = await translateTextWithOpenAI(payload.new.text, langRef.current);
+            if (translated) {
+              setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, translated_text: translated } : m));
+            }
+          }
+        }
       }).subscribe();
 
       const transcriptSub = supabase.channel("transcripts_channel").on("postgres_changes", { event: "INSERT", schema: "public", table: "transcripts" }, async (payload: any) => {
@@ -701,11 +718,12 @@ export function ClassroomInterface() {
                 <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollbarWidth: "thin" }}>
                   {messages.map((msg: any, i: number) => {
                     const isSelf = msg.user_id === profile.id;
+                    const textToShow = (selectedLang !== "English" && msg.translated_text) ? msg.translated_text : msg.text;
                     return (
                       <div key={msg.id || i} className={`flex flex-col ${isSelf ? "items-end" : "items-start"}`}>
                         {!isSelf && <span className="text-xs text-gray-500 mb-1">{msg.user_name}</span>}
                         <div className="text-xs px-3 py-2 rounded-xl max-w-[85%]" style={{ background: isSelf ? "#7c3aed" : "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.85)" }}>
-                          {msg.text}
+                          {textToShow}
                         </div>
                       </div>
                     );
