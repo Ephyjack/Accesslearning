@@ -29,9 +29,11 @@ import {
   Hash,
   Lock,
   Trash2,
-  Menu, X, Circle
+  Menu, X, Circle,
+  UserPlus
 } from "lucide-react";
 import { AIAssistant } from "./AIAssistant";
+import { NotificationBell } from "./NotificationBell";
 import {
   AreaChart,
   Area,
@@ -51,7 +53,7 @@ export function TeacherDashboard() {
   // Tabs & Modals
   // -----------------------
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities" | "materials">("classes");
+  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities" | "materials" | "requests">("classes");
   const [showAddMaterialModal, setShowAddMaterialModal] = useState(false);
   const [newMaterial, setNewMaterial] = useState({ title: '', url: '', class_id: '' });
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
@@ -211,6 +213,39 @@ export function TeacherDashboard() {
     setShowJoinRoomModal(null);
   };
 
+  // ── Accept / Decline student learn requests ──────────────────────────────
+  const acceptLearnRequest = async (reqId: string, studentId: string) => {
+    await supabase.from("teacher_requests").update({ status: "accepted", updated_at: new Date().toISOString() }).eq("id", reqId);
+    setTeacherRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "accepted" } : r));
+    
+    // Notify student
+    if (profile) {
+      await supabase.from("notifications").insert({
+        user_id: studentId,
+        actor_id: profile.id,
+        type: "request_accepted",
+        message: `${profile.full_name} accepted your request to learn!`,
+        link: "/community"
+      });
+    }
+  };
+
+  const declineLearnRequest = async (reqId: string, studentId?: string) => {
+    await supabase.from("teacher_requests").update({ status: "declined", updated_at: new Date().toISOString() }).eq("id", reqId);
+    setTeacherRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "declined" } : r));
+
+    // Notify student
+    if (profile && studentId) {
+      await supabase.from("notifications").insert({
+        user_id: studentId,
+        actor_id: profile.id,
+        type: "request_declined",
+        message: `${profile.full_name} declined your request.`,
+        link: "/explore/teachers"
+      });
+    }
+  };
+
 
   // -----------------------
   // Engagement, assignments, communities
@@ -219,6 +254,7 @@ export function TeacherDashboard() {
   const [materials, setMaterials] = useState<any[]>([]);
   const [communities, setCommunities] = useState<any[]>([]);
   const [copiedCode, setCopiedCode] = useState<string>("");
+  const [teacherRequests, setTeacherRequests] = useState<any[]>([]);
 
   // -----------------------
   // Copy Class Code
@@ -242,6 +278,20 @@ export function TeacherDashboard() {
       else setCommunities(data?.map((m: any) => m.communities).filter(Boolean) || []);
     };
     fetchCommunities();
+  }, [profile]);
+
+  // Fetch student "Request to Learn" requests sent to this teacher
+  useEffect(() => {
+    const fetchTeacherRequests = async () => {
+      if (!profile) return;
+      const { data, error } = await supabase
+        .from("teacher_requests")
+        .select("id, status, message, subjects, created_at, student_id, profiles!teacher_requests_student_id_fkey(id, full_name, avatar_url, country, school)")
+        .eq("teacher_id", profile.id)
+        .order("created_at", { ascending: false });
+      if (!error && data) setTeacherRequests(data);
+    };
+    fetchTeacherRequests();
   }, [profile]);
 
   // Fetch class resources (Materials)
@@ -307,10 +357,9 @@ export function TeacherDashboard() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
+        const userError = !user ? new Error("No session") : null;
 
         if (userError) throw userError;
 
@@ -524,7 +573,20 @@ export function TeacherDashboard() {
               active: false,
               action: (() => setActiveTab("materials")) as () => void,
             },
-          ].map((item) => (
+            {
+              icon: <Users className="w-4 h-4" />,
+              label: "Student Requests",
+              active: false,
+              badge: teacherRequests.filter(r => r.status === "pending").length || 0,
+              action: (() => setActiveTab("requests")) as () => void,
+            },
+            {
+              icon: <Globe className="w-4 h-4" />,
+              label: "My Public Profile",
+              active: false,
+              action: (() => navigate(`/profile/${profile?.id}`)) as () => void,
+            },
+          ].map((item: any) => (
             <button
               key={item.label}
               onClick={item.action}
@@ -540,7 +602,11 @@ export function TeacherDashboard() {
             >
               {item.icon}
               {item.label}
-
+              {item.badge > 0 && (
+                <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-bold" style={{ background: "#ef4444", color: "white", minWidth: "1.25rem", textAlign: "center" }}>
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -644,12 +710,15 @@ export function TeacherDashboard() {
             </div>
 
             {/* Notifications */}
+            <NotificationBell userId={profile?.id} />
+
             <button
               onClick={() => setShowAccessModal(true)}
               className="relative p-2.5 rounded-xl bg-white border shrink-0"
               style={{ borderColor: "#e2e8f0" }}
+              title="Class Access Requests"
             >
-              <Bell className="w-5 h-5 text-gray-500" />
+              <UserPlus className="w-5 h-5 text-gray-500" />
               {pendingCount > 0 && (
                 <span
                   className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full animate-pulse"
@@ -761,22 +830,29 @@ export function TeacherDashboard() {
             className="flex p-1 rounded-xl w-full sm:w-auto overflow-x-auto"
             style={{ background: "#f1f5f9", scrollbarWidth: "none" }}
           >
-            {(["classes", "rooms", "communities", "materials"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setActiveTab(t)}
-                className="px-5 py-2 rounded-lg text-sm capitalize transition-all shrink-0 flex-1 sm:flex-none"
-                style={{
-                  background: activeTab === t ? "white" : "transparent",
-                  color: activeTab === t ? "#0f172a" : "#64748b",
-                  fontWeight: activeTab === t ? 600 : 400,
-                  boxShadow:
-                    activeTab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                }}
-              >
-                {t === "classes" ? "Classrooms" : t === "rooms" ? "Persistent Rooms" : t === "communities" ? "Communities" : "Materials"}
-              </button>
-            ))}
+            {(["classes", "rooms", "communities", "materials", "requests"] as const).map((t) => {
+              const pendingCount = t === "requests" ? teacherRequests.filter(r => r.status === "pending").length : 0;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t)}
+                  className="relative px-4 py-2 rounded-lg text-sm capitalize transition-all shrink-0 flex-1 sm:flex-none flex items-center gap-1.5 justify-center"
+                  style={{
+                    background: activeTab === t ? "white" : "transparent",
+                    color: activeTab === t ? "#0f172a" : "#64748b",
+                    fontWeight: activeTab === t ? 600 : 400,
+                    boxShadow: activeTab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                  }}
+                >
+                  {t === "classes" ? "Classrooms" : t === "rooms" ? "Rooms" : t === "communities" ? "Communities" : t === "materials" ? "Materials" : "Requests"}
+                  {pendingCount > 0 && (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full font-bold" style={{ background: "#ef4444", color: "white", fontSize: 10 }}>
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {activeTab === "rooms" && (
@@ -1169,6 +1245,120 @@ export function TeacherDashboard() {
               </>
             )}
           </div>
+
+          {/* ── Requests tab ── */}
+          {activeTab === "requests" && (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#0f172a" }}>Student Requests</h2>
+                <span className="text-xs text-gray-400">{teacherRequests.length} total</span>
+              </div>
+
+              {teacherRequests.length === 0 && (
+                <div className="p-10 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3" style={{ background: "rgba(124,58,237,0.07)", color: "#7c3aed" }}>
+                    <Users className="w-7 h-7" />
+                  </div>
+                  <h3 className="font-bold text-gray-900 mb-1">No requests yet</h3>
+                  <p className="text-sm text-gray-500 max-w-xs">Students who find you on the Teacher Discovery page will send requests here.</p>
+                  <button onClick={() => navigate("/explore/teachers")} className="mt-4 text-sm text-violet-600 hover:underline">View your public profile →</button>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {teacherRequests.map((req: any) => {
+                  const student = req.profiles;
+                  const initials = student?.full_name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() || "ST";
+                  const isPending = req.status === "pending";
+                  const isAccepted = req.status === "accepted";
+                  return (
+                    <div
+                      key={req.id}
+                      className="bg-white rounded-2xl p-5 shadow-sm"
+                      style={{
+                        border: isPending ? "1px solid rgba(124,58,237,0.2)" : "1px solid #f1f5f9",
+                        background: isPending ? "rgba(124,58,237,0.015)" : "white",
+                      }}
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Avatar */}
+                        <div
+                          className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold shrink-0 overflow-hidden"
+                          style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+                        >
+                          {student?.avatar_url
+                            ? <img src={student.avatar_url} alt={student.full_name} className="w-full h-full object-cover" />
+                            : initials}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-gray-900 text-sm">{student?.full_name || "A student"}</span>
+                            {student?.country && <span className="text-xs text-gray-400">{student.country}</span>}
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full font-semibold capitalize ml-auto"
+                              style={{
+                                background: isPending ? "rgba(251,191,36,0.12)" : isAccepted ? "rgba(5,150,105,0.1)" : "rgba(239,68,68,0.1)",
+                                color: isPending ? "#d97706" : isAccepted ? "#059669" : "#ef4444",
+                              }}
+                            >
+                              {req.status}
+                            </span>
+                          </div>
+
+                          {/* Subjects requested */}
+                          {req.subjects && req.subjects.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {req.subjects.map((s: string) => (
+                                <span key={s} className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>{s}</span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Message */}
+                          {req.message && (
+                            <p className="text-sm text-gray-500 mt-2 italic leading-relaxed">" {req.message} "</p>
+                          )}
+
+                          {/* Actions */}
+                          {isPending && (
+                            <div className="flex gap-2 mt-3">
+                              <button
+                                onClick={() => acceptLearnRequest(req.id, req.student_id)}
+                                className="flex-1 py-2 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity"
+                                style={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Accept
+                              </button>
+                              <button
+                                onClick={() => declineLearnRequest(req.id, req.student_id)}
+                                className="flex-1 py-2 rounded-xl text-sm font-semibold border hover:bg-red-50 transition-colors"
+                                style={{ borderColor: "#fecaca", color: "#ef4444" }}
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )}
+
+                          {isAccepted && (
+                            <div className="flex gap-2 mt-3">
+                              <button
+                                onClick={() => navigate(`/profile/${req.student_id}`)}
+                                className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white hover:opacity-90 transition-opacity"
+                                style={{ background: "#1e3a8a" }}
+                              >
+                                View Student
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
 
           {/* Right column */}

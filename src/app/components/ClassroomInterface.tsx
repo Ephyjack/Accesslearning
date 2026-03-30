@@ -69,18 +69,41 @@ export function ClassroomInterface() {
 
   useEffect(() => {
     const initializeClassroom = async () => {
-      // 1. Fetch Profile
-      const { data: { user } } = await supabase.auth.getUser();
+      // 1. Fetch Session — use getSession() (reads from local cache) to avoid
+      //    "session not found" errors that getUser() (network call) can throw.
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) { navigate("/"); return; }
 
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (!prof) { navigate("/"); return; }
       setProfile(prof);
 
-      // 2. Fetch Class Details
-      const { data: cls } = await supabase.from("classes").select("*").eq("code", classCode).single();
+      // 2. Fetch Class Details — try rooms table first (community rooms use UUID id),
+      //    then fall back to classes table (dashboard rooms use a short code).
+      let cls: any = null;
+      let isFromRoomsTable = false;
+
+      // Try rooms table by UUID id (from community page navigation)
+      const { data: roomById } = await supabase.from("rooms").select("*").eq("id", classCode).single();
+      if (roomById) {
+        cls = {
+          ...roomById,
+          code: roomById.code || roomById.id,
+          name: roomById.name,
+          teacher_id: roomById.teacher_id,
+        };
+        isFromRoomsTable = true;
+      }
+
       if (!cls) {
-        alert("Class not found!");
+        // Fall back: try classes table by code (dashboard-created classes)
+        const { data: classByCode } = await supabase.from("classes").select("*").eq("code", classCode).single();
+        cls = classByCode;
+      }
+
+      if (!cls) {
+        alert("Room not found. Please check the link and try again.");
         navigate("/");
         return;
       }
@@ -88,24 +111,41 @@ export function ClassroomInterface() {
 
       // 3. Teacher vs Student Logic
       if (cls.teacher_id === prof.id) {
+        // ── Teacher: always approved, no waiting room needed ──
         setIsTeacher(true);
         setRoomStatus('approved');
         const token = await createLiveKitToken(cls.id, prof.id, prof.full_name, true);
         setLiveKitToken(token);
       } else {
         setIsTeacher(false);
-        // Student: Check room requests
-        const { data: req } = await supabase.from("room_requests").select("*").eq("class_id", cls.id).eq("student_id", prof.id).single();
-        if (req && req.status === 'approved') {
+
+        if (isFromRoomsTable) {
+          // ── Community Voice Room: grant immediate access ──
+          // Students are already validated as community members. Inserting into
+          // room_requests here would cause a FK violation (it references classes, not rooms).
           setRoomStatus('approved');
           const token = await createLiveKitToken(cls.id, prof.id, prof.full_name, false);
           setLiveKitToken(token);
-        } else if (req && req.status === 'pending') {
-          setRoomStatus('pending');
         } else {
-          // If no request is found, insert one automatically.
-          await supabase.from("room_requests").insert({ class_id: cls.id, student_id: prof.id, status: 'pending' });
-          setRoomStatus('pending');
+          // ── Dashboard Class: use teacher-approval waiting room flow ──
+          const { data: req } = await supabase
+            .from("room_requests")
+            .select("*")
+            .eq("class_id", cls.id)
+            .eq("student_id", prof.id)
+            .single();
+
+          if (req && req.status === 'approved') {
+            setRoomStatus('approved');
+            const token = await createLiveKitToken(cls.id, prof.id, prof.full_name, false);
+            setLiveKitToken(token);
+          } else if (req && req.status === 'pending') {
+            setRoomStatus('pending');
+          } else {
+            // No existing request — create one and wait for teacher approval
+            await supabase.from("room_requests").insert({ class_id: cls.id, student_id: prof.id, status: 'pending' });
+            setRoomStatus('pending');
+          }
         }
       }
     };

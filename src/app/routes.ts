@@ -6,6 +6,8 @@ import { TeacherDashboard } from "./components/TeacherDashboard";
 import { StudentDashboard } from "./components/StudentDashboard";
 import { ClassroomInterface } from "./components/ClassroomInterface";
 import { CommunityPage } from "./components/CommunityPage";
+import { TeacherDiscovery } from "./components/TeacherDiscovery";
+import { PublicTeacherProfile } from "./components/PublicTeacherProfile";
 
 export const router = createBrowserRouter([
   { path: "/", Component: LandingPage },
@@ -16,4 +18,8 @@ export const router = createBrowserRouter([
   { path: "/classroom/:id", Component: ClassroomInterface },
   { path: "/community/:id", Component: CommunityPage },
   { path: "/community", Component: CommunityPage },
+  { path: "/explore/teachers", Component: TeacherDiscovery },
+  { path: "/profile/:id", Component: PublicTeacherProfile },
 ]);
+
+

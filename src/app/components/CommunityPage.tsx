@@ -58,6 +58,30 @@ const badge = (role: Role) => ({
 }[role]);
 const S = { bg: "#0e1117", sidebar: "#161b22", rail: "#0d1117", border: "rgba(255,255,255,0.07)", text: "#e6edf3", sub: "#8b949e", accent: "#7c3aed" };
 
+// ─── YouTube Utilities ──────────────────────────────────────────────────────
+const YT_REGEX = /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/;
+
+const extractYtId = (text: string): string | null => {
+  const m = text.match(YT_REGEX);
+  return m ? m[1] : null;
+};
+
+function YouTubeEmbed({ videoId }: { videoId: string }) {
+  return (
+    <div className="mt-2 rounded-xl overflow-hidden" style={{ maxWidth: 480, border: "1px solid rgba(255,255,255,0.1)" }}>
+      <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`}
+          title="YouTube video"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 const chanIcon = (t: ChannelType) => {
   if (t === "announcement") return <Megaphone className="w-3.5 h-3.5 shrink-0" />;
   if (t === "qna") return <HelpCircle className="w-3.5 h-3.5 shrink-0" />;
@@ -771,7 +795,25 @@ export function CommunityPage() {
                                     <span className="truncate" style={{ color: S.sub }}>{msg.replyToText}</span>
                                   </div>
                                 )}
-                                <p className="text-sm leading-relaxed break-words" style={{ color: "#cdd9e5" }}>{msg.text}</p>
+                                {/* Message text — detect YouTube links */}
+                                {(() => {
+                                  const ytId = extractYtId(msg.text);
+                                  // Highlight URLs in plain text
+                                  const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                  const parts = msg.text.split(urlRegex);
+                                  return (
+                                    <>
+                                      <p className="text-sm leading-relaxed break-words" style={{ color: "#cdd9e5" }}>
+                                        {parts.map((part, idx) =>
+                                          urlRegex.test(part)
+                                            ? <a key={idx} href={part} target="_blank" rel="noreferrer" className="underline hover:opacity-80 transition-opacity" style={{ color: "#58a6ff" }}>{part}</a>
+                                            : part
+                                        )}
+                                      </p>
+                                      {ytId && <YouTubeEmbed videoId={ytId} />}
+                                    </>
+                                  );
+                                })()}
                                 {/* Attachment */}
                                 {msg.attachment && (
                                   <div className="mt-2">
