@@ -7,13 +7,14 @@ import {
   Settings, Languages, Headphones, Upload, Radio, Circle, Hash,
   Lock, Menu, X
 } from "lucide-react";
+import { AIAssistant } from "./AIAssistant";
 
 export function StudentDashboard() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "assignments" | "recordings" | "communities">("classes");
+  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities" | "materials">("classes");
   const [preferredLang, setPreferredLang] = useState("English");
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -31,7 +32,7 @@ export function StudentDashboard() {
   // Dynamic Array Initializers
   const [enrolledClasses, setEnrolledClasses] = useState<any[]>([]);
   const [ROOMS, setRooms] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
   const [recordings, setRecordings] = useState<any[]>([]);
   const [communities, setCommunities] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<Record<string, string>>({});
@@ -81,6 +82,17 @@ export function StudentDashboard() {
         setRoomStatuses(statuses);
       }
       setEnrolledClasses(allClasses);
+
+      // Fetch materials for enrolled classes
+      if (allClasses.length > 0) {
+        const classIds = allClasses.map((c: any) => c.id);
+        const { data: mats } = await supabase
+          .from("class_resources")
+          .select("*, classes(name)")
+          .in("class_id", classIds)
+          .order("created_at", { ascending: false });
+        if (mats) setMaterials(mats);
+      }
 
       // Fetch communities
       const { data: myComms } = await supabase
@@ -296,10 +308,8 @@ export function StudentDashboard() {
         <nav className="flex-1 px-3">
           {[
             { icon: <Layers className="w-4 h-4" />, label: "Dashboard", active: true, action: undefined },
-            { icon: <BookOpen className="w-4 h-4" />, label: "My Classes", active: false, action: undefined },
+            { icon: <FileText className="w-4 h-4" />, label: "Materials", active: false, action: () => setActiveTab("materials") },
             { icon: <Radio className="w-4 h-4" />, label: "Communities", active: false, action: () => navigate("/community") },
-            { icon: <FileText className="w-4 h-4" />, label: "Assignments", active: false, action: undefined },
-            { icon: <Video className="w-4 h-4" />, label: "Recordings", active: false, action: undefined },
             { icon: <Languages className="w-4 h-4" />, label: "Transcripts", active: false, action: undefined },
             { icon: <Headphones className="w-4 h-4" />, label: "Accessibility", active: false, action: undefined },
           ].map((item) => (
@@ -356,7 +366,7 @@ export function StudentDashboard() {
                 Hello, {firstName} 👋
               </h1>
               <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
-                You have {enrolledClasses.length} class{enrolledClasses.length !== 1 ? 'es' : ''} today and {assignments.length} pending assignment{assignments.length !== 1 ? 's' : ''}
+                You have {enrolledClasses.length} class{enrolledClasses.length !== 1 ? 'es' : ''} and {materials.length} material{materials.length !== 1 ? 's' : ''} available
               </p>
             </div>
           </div>
@@ -367,7 +377,6 @@ export function StudentDashboard() {
             </div>
             <button className="relative p-2.5 rounded-xl bg-white border shrink-0" style={{ borderColor: "#e2e8f0" }}>
               <Bell className="w-5 h-5 text-gray-500" />
-              {assignments.length > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />}
             </button>
             <button onClick={() => setShowCreateModal(true)} className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:opacity-90 mr-2" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>
               <Plus className="w-4 h-4" />
@@ -386,8 +395,8 @@ export function StudentDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 mb-6 lg:mb-8">
           {[
             { icon: <BookOpen className="w-5 h-5" />, label: "Enrolled Classes", value: enrolledClasses.length.toString(), color: "#1e3a8a" },
-            { icon: <FileText className="w-5 h-5" />, label: "Pending Assignments", value: enrolledClasses.length === 0 ? "0" : assignments.length.toString(), color: "#dc2626" },
-            { icon: <CheckCircle2 className="w-5 h-5" />, label: "Submitted", value: "0", color: "#059669" },
+            { icon: <FileText className="w-5 h-5" />, label: "Course Materials", value: materials.length.toString(), color: "#dc2626" },
+            { icon: <CheckCircle2 className="w-5 h-5" />, label: "Total Points", value: (profile?.points || 0).toString(), color: "#059669" },
             { icon: <Video className="w-5 h-5" />, label: "Recordings", value: enrolledClasses.length === 0 ? "0" : recordings.length.toString(), color: "#7c3aed" },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-2xl p-5 shadow-sm" style={{ border: "1px solid #f1f5f9" }}>
@@ -401,7 +410,7 @@ export function StudentDashboard() {
         {/* Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6 w-full max-w-full">
           <div className="flex gap-1 p-1 rounded-xl w-full sm:w-auto overflow-x-auto" style={{ background: "#f1f5f9", scrollbarWidth: "none" }}>
-            {(["classes", "rooms", "assignments", "recordings", "communities"] as const).map((tab) => (
+            {(["classes", "rooms", "communities", "materials"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -544,19 +553,35 @@ export function StudentDashboard() {
           </div>
         )}
 
-        {activeTab === "assignments" && assignments.length === 0 && (
+
+
+        {/* Materials Tab */}
+        {activeTab === "materials" && materials.length === 0 && (
           <div className="text-center py-16 px-4 rounded-2xl border-2 border-dashed" style={{ borderColor: "#cbd5e1", background: "transparent" }}>
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-gray-900 font-bold mb-1">All Caught Up!</h3>
-            <p className="text-sm text-gray-500">You don't have any pending assignments right now.</p>
+            <h3 className="text-gray-900 font-bold mb-1">No Materials Yet</h3>
+            <p className="text-sm text-gray-500">Your teachers haven't uploaded any study materials or links.</p>
           </div>
         )}
 
-        {activeTab === "recordings" && recordings.length === 0 && (
-          <div className="text-center py-16 px-4 rounded-2xl border-2 border-dashed" style={{ borderColor: "#cbd5e1", background: "transparent" }}>
-            <Video className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-gray-900 font-bold mb-1">No Recordings Available</h3>
-            <p className="text-sm text-gray-500">Past class sessions and their transcripts will appear here.</p>
+        {activeTab === "materials" && materials.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+            {materials.map((m) => (
+              <div key={m.id} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow" style={{ border: "1px solid #f1f5f9" }}>
+                <div className="flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-white font-bold" style={{ background: "#1e3a8a" }}>
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">{m.title}</h3>
+                    <p className="text-xs text-gray-500 mb-1">{m.classes?.name || "Resource"}</p>
+                    <a href={m.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">
+                      Open Resource
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -592,6 +617,9 @@ export function StudentDashboard() {
           </div>
         )}
       </main>
+
+      {/* AI Assistant */}
+      <AIAssistant context={`Student dashboard view. Profile: ${profile?.full_name}. Enrolled Classes: ${enrolledClasses.length}. Available Materials: ${materials.length}`} />
 
       {/* Join Class Modal */}
       {showJoinModal && (

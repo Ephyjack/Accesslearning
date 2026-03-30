@@ -8,6 +8,7 @@ import {
   UserCheck, UserX, UserMinus, Plus, Copy
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
+import { AIAssistant } from "./AIAssistant";
 import '@livekit/components-styles';
 import {
   LiveKitRoom,
@@ -780,6 +781,13 @@ export function ClassroomInterface() {
             )}
           </div>
         </div>
+        {aiEnabled && (
+          <AIAssistant
+            context={`Class Live Transcript Context. Answer questions strictly relying on these transcripts if relevant. Transcripts: 
+            ${transcripts.slice(-30).map(t => '[' + t.speaker + ']: ' + t.text).join('\n')}
+            `}
+          />
+        )}
       </>
     );
   }

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { supabase } from "./supabaseClient";
 import {
   GraduationCap,
+  BarChart2,
   Plus,
   Copy,
   Users,
@@ -30,6 +31,7 @@ import {
   Trash2,
   Menu, X, Circle
 } from "lucide-react";
+import { AIAssistant } from "./AIAssistant";
 import {
   AreaChart,
   Area,
@@ -49,7 +51,9 @@ export function TeacherDashboard() {
   // Tabs & Modals
   // -----------------------
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities">("classes");
+  const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities" | "materials">("classes");
+  const [showAddMaterialModal, setShowAddMaterialModal] = useState(false);
+  const [newMaterial, setNewMaterial] = useState({ title: '', url: '', class_id: '' });
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
@@ -212,7 +216,7 @@ export function TeacherDashboard() {
   // Engagement, assignments, communities
   // -----------------------
   const [engagementData, setEngagementData] = useState<any[]>([]);
-  const [recentAssignments, setRecentAssignments] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
   const [communities, setCommunities] = useState<any[]>([]);
   const [copiedCode, setCopiedCode] = useState<string>("");
 
@@ -240,22 +244,45 @@ export function TeacherDashboard() {
     fetchCommunities();
   }, [profile]);
 
-  // Fetch recent assignments
+  // Fetch class resources (Materials)
   useEffect(() => {
-    const fetchAssignments = async () => {
+    const fetchMaterials = async () => {
       if (!profile) return;
       const { data, error } = await supabase
-        .from("assignments")
-        .select("*")
-        .eq("teacher_id", profile.id)
-        .order("created_at", { ascending: false })
-        .limit(5);
+        .from("class_resources")
+        .select("*, classes(name)")
+        .eq("created_by", profile.id)
+        .order("created_at", { ascending: false });
 
       if (error) console.error(error);
-      else setRecentAssignments(data || []);
+      else setMaterials(data || []);
     };
-    fetchAssignments();
+    fetchMaterials();
   }, [profile]);
+
+  const handleCreateMaterial = async () => {
+    if (!newMaterial.title || !newMaterial.url || !newMaterial.class_id) return;
+    const { data, error } = await supabase.from('class_resources').insert({
+      title: newMaterial.title,
+      url: newMaterial.url,
+      class_id: newMaterial.class_id,
+      created_by: profile.id
+    }).select('*, classes(name)').single();
+
+    if (error) {
+      alert("Failed to add material: " + error.message);
+    } else if (data) {
+      setMaterials([data, ...materials]);
+      setShowAddMaterialModal(false);
+      setNewMaterial({ title: '', url: '', class_id: '' });
+    }
+  };
+
+  const handleDeleteMaterial = async (id: string) => {
+    if (!confirm("Delete this material?")) return;
+    const { error } = await supabase.from('class_resources').delete().eq('id', id);
+    if (!error) setMaterials(materials.filter(m => m.id !== id));
+  };
 
   // Fetch weekly attendance / engagement data
   useEffect(() => {
@@ -493,33 +520,9 @@ export function TeacherDashboard() {
             },
             {
               icon: <FileText className="w-4 h-4" />,
-              label: "Assignments",
+              label: "Materials",
               active: false,
-              action: undefined as (() => void) | undefined,
-            },
-            {
-              icon: <BarChart2 className="w-4 h-4" />,
-              label: "Analytics",
-              active: false,
-              action: undefined as (() => void) | undefined,
-            },
-            {
-              icon: <ShieldCheck className="w-4 h-4" />,
-              label: "Access Control",
-              active: false,
-              action: (() => setShowAccessModal(true)) as () => void,
-            },
-            {
-              icon: <Mic className="w-4 h-4" />,
-              label: "Recordings",
-              active: false,
-              action: undefined as (() => void) | undefined,
-            },
-            {
-              icon: <Globe className="w-4 h-4" />,
-              label: "Languages",
-              active: false,
-              action: undefined as (() => void) | undefined,
+              action: (() => setActiveTab("materials")) as () => void,
             },
           ].map((item) => (
             <button
@@ -537,18 +540,7 @@ export function TeacherDashboard() {
             >
               {item.icon}
               {item.label}
-              {item.label === "Access Control" && pendingCount > 0 && (
-                <span
-                  className="ml-auto w-5 h-5 rounded-full flex items-center justify-center text-white animate-pulse"
-                  style={{
-                    background: "#ef4444",
-                    fontSize: "0.65rem",
-                    fontWeight: 700,
-                  }}
-                >
-                  {pendingCount}
-                </span>
-              )}
+
             </button>
           ))}
         </nav>
@@ -757,6 +749,10 @@ export function TeacherDashboard() {
               </div>
             </div>
           ))}
+
+          {/* AI Assistant */}
+          <AIAssistant context={`Teacher dashboard view. Profile: ${profile?.full_name}. Upcoming Classes: ${classes.length}. Resources: ${materials.length}`} />
+
         </div>
 
         {/* Tab toggle */}
@@ -765,7 +761,7 @@ export function TeacherDashboard() {
             className="flex p-1 rounded-xl w-full sm:w-auto overflow-x-auto"
             style={{ background: "#f1f5f9", scrollbarWidth: "none" }}
           >
-            {(["classes", "rooms", "communities"] as const).map((t) => (
+            {(["classes", "rooms", "communities", "materials"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
@@ -795,680 +791,713 @@ export function TeacherDashboard() {
               New Room
             </button>
           )}
+
+          {activeTab === "materials" && (
+            <button
+              onClick={() => setShowAddMaterialModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm hover:opacity-90 transition-all"
+              style={{
+                background: "linear-gradient(135deg, #1e3a8a, #7c3aed)",
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              Add Material
+            </button>
+          )}
         </div>
 
-        {/* Main grid left column */}
-        <div className="lg:col-span-2 space-y-4">
-          {activeTab === "classes" && (
-            <>
-              <div className="flex items-center justify-between mb-1">
-                <h2
-                  style={{
-                    fontSize: "1.1rem",
-                    fontWeight: 700,
-                    color: "#0f172a",
-                  }}
-                >
-                  My Classrooms
-                </h2>
-                <button className="text-xs text-violet-600 flex items-center gap-1">
-                  View all <ChevronRight className="w-3 h-3" />
-                </button>
-              </div>
-
-              {classes.length === 0 && (
-                <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
-                    <BookOpen className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">No classes yet</h3>
-                  <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't created any classrooms. Click "Create Classroom" to get started.</p>
-                  <button onClick={() => setShowCreateModal(true)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#7c3aed" }}>
-                    Create Classroom
+        {/* Main grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          {/* Main grid left column */}
+          <div className="lg:col-span-2 space-y-4">
+            {activeTab === "classes" && (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <h2
+                    style={{
+                      fontSize: "1.1rem",
+                      fontWeight: 700,
+                      color: "#0f172a",
+                    }}
+                  >
+                    My Classrooms
+                  </h2>
+                  <button className="text-xs text-violet-600 flex items-center gap-1">
+                    View all <ChevronRight className="w-3 h-3" />
                   </button>
                 </div>
-              )}
 
-              {classes.map((cls) => (
-                <div
-                  key={cls.id}
-                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
-                  style={{ border: "1px solid #f1f5f9" }}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div
-                        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                        style={{
-                          background: `${cls.color}18`,
-                          color: cls.color,
-                        }}
-                      >
-                        <BookOpen className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span style={{ fontWeight: 700, color: "#0f172a" }}>
-                            {cls.name}
-                          </span>
-                          {cls.status === "active" && (
-                            <span
-                              className="text-xs px-2 py-0.5 rounded-full"
-                              style={{
-                                background: "#dcfce7",
-                                color: "#16a34a",
-                              }}
-                            >
-                              Scheduled Today
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-4 mt-1">
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <Users className="w-3.5 h-3.5" /> {cls.students}{" "}
-                            students
-                          </span>
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" /> {cls.nextSession}
-                          </span>
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <Globe className="w-3.5 h-3.5" /> {cls.language}
-                          </span>
-                        </div>
-                      </div>
+                {classes.length === 0 && (
+                  <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
+                      <BookOpen className="w-8 h-8" />
                     </div>
-
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <MoreVertical className="w-4 h-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">No classes yet</h3>
+                    <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't created any classrooms. Click "Create Classroom" to get started.</p>
+                    <button onClick={() => setShowCreateModal(true)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#7c3aed" }}>
+                      Create Classroom
                     </button>
                   </div>
+                )}
 
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">Class Code:</span>
-                      <code
-                        className="text-xs px-2.5 py-1 rounded-lg"
-                        style={{
-                          background: "#f1f5f9",
-                          color: "#0f172a",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {cls.code}
-                      </code>
-                      <button
-                        onClick={() => copyCode(cls.code)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        {copiedCode === cls.code ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-gray-400" />
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="flex gap-2">
-                      {cls.teacher_id === profile?.id && (
-                        <button
-                          onClick={() => handleDeleteClass(cls.id)}
-                          className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-red-50"
-                          style={{ border: "1px solid #fecaca", color: "#ef4444" }}
-                        >
-                          Delete
-                        </button>
-                      )}
-                      <button
-                        onClick={() => navigate(`/classroom/${cls.code}`)}
-                        className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 transition-all hover:opacity-90"
-                        style={{ background: cls.color || '#1e3a8a' }}
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                        {cls.teacher_id === profile?.id ? "Start Class" : "Enter Class"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-
-          {activeTab === "rooms" && (
-            <>
-              {/* Dynamic Rooms */}
-              {rooms.length === 0 && (
-                <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
-                    <Radio className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">No persistent rooms</h3>
-                  <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't opened any persistent rooms. Persistent rooms are always available for students to request access.</p>
-                  <button onClick={() => setShowCreateRoomModal(true)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#1e3a8a" }}>
-                    Create Room
-                  </button>
-                </div>
-              )}
-              {rooms.map((room) => (
-                <div
-                  key={room.id}
-                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
-                  style={{ border: "1px solid #f1f5f9" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                        style={{
-                          background: room.live
-                            ? "rgba(34,197,94,0.1)"
-                            : "#f1f5f9",
-                          color: room.live ? "#16a34a" : "#94a3b8",
-                        }}
-                      >
-                        <Radio className="w-5 h-5" />
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span style={{ fontWeight: 700, color: "#0f172a" }}>
-                            {room.name}
-                          </span>
-                          <span
-                            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
-                            style={{
-                              background: room.live
-                                ? "rgba(34,197,94,0.1)"
-                                : "#f1f5f9",
-                              color: room.live ? "#16a34a" : "#94a3b8",
-                            }}
-                          >
-                            <span
-                              className="w-1.5 h-1.5 rounded-full"
-                              style={{
-                                background: room.live ? "#22c55e" : "#94a3b8",
-                              }}
-                            />
-                            {room.live ? "Live" : "Offline"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <Users className="w-3.5 h-3.5" />
-                            {room.participants || 0} participants
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {room.sessions || 0} sessions total
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      {room.teacher_id === profile?.id && room.pendingCount > 0 && (
-                        <button
-                          onClick={() => setShowAccessModal(true)}
-                          className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                {classes.map((cls) => (
+                  <div
+                    key={cls.id}
+                    className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                    style={{ border: "1px solid #f1f5f9" }}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-4">
+                        <div
+                          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
                           style={{
-                            background: "rgba(251,191,36,0.1)",
-                            color: "#d97706",
+                            background: `${cls.color}18`,
+                            color: cls.color,
                           }}
                         >
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          Requests
+                          <BookOpen className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                              {cls.name}
+                            </span>
+                            {cls.status === "active" && (
+                              <span
+                                className="text-xs px-2 py-0.5 rounded-full"
+                                style={{
+                                  background: "#dcfce7",
+                                  color: "#16a34a",
+                                }}
+                              >
+                                Scheduled Today
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 mt-1">
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5" /> {cls.students}{" "}
+                              students
+                            </span>
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> {cls.nextSession}
+                            </span>
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Globe className="w-3.5 h-3.5" /> {cls.language}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button className="text-gray-400 hover:text-gray-600">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">Class Code:</span>
+                        <code
+                          className="text-xs px-2.5 py-1 rounded-lg"
+                          style={{
+                            background: "#f1f5f9",
+                            color: "#0f172a",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {cls.code}
+                        </code>
+                        <button
+                          onClick={() => copyCode(cls.code)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          {copiedCode === cls.code ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-gray-400" />
+                          )}
                         </button>
-                      )}
-                      {room.teacher_id === profile?.id ? (
-                        <>
+                      </div>
+
+                      <div className="flex gap-2">
+                        {cls.teacher_id === profile?.id && (
                           <button
-                            onClick={() => navigate(`/classroom/${room.id}`)}
-                            className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90"
-                            style={{ background: room.live ? "#16a34a" : "#1e3a8a" }}
-                          >
-                            <Video className="w-3.5 h-3.5" />
-                            {room.live ? "Enter Room" : "Start Class"}
-                          </button>
-                          <button
-                            className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-red-50 transition-colors"
-                            onClick={() => handleDeleteRoom(room.id)}
+                            onClick={() => handleDeleteClass(cls.id)}
+                            className="text-xs px-3 py-1.5 rounded-lg border transition-colors hover:bg-red-50"
                             style={{ border: "1px solid #fecaca", color: "#ef4444" }}
                           >
                             Delete
                           </button>
-                        </>
-                      ) : (
-                        <>
-                          {roomStatuses[room.id] === "pending" ? (
-                            <button disabled className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5" style={{ background: "rgba(251,191,36,0.15)", color: "#d97706" }}>
-                              <Radio className="w-3.5 h-3.5" /> Pending
-                            </button>
-                          ) : roomStatuses[room.id] === "approved" ? (
-                            <button onClick={() => navigate(`/classroom/${room.id}`)} className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90" style={{ background: "#16a34a" }}>
-                              <Video className="w-3.5 h-3.5" /> Enter Room
-                            </button>
-                          ) : (
-                            <button onClick={() => handleRoomAction(room)} className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90" style={{ background: room.is_private ? "#7c3aed" : "#1e3a8a" }}>
-                              {room.is_private ? <Lock className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
-                              {room.is_private ? "Request to Join" : "Join Room"}
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-
-          {activeTab === "communities" && (
-            <>
-              {communities.length === 0 && (
-                <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(139,92,246,0.08)", color: "#8b5cf6" }}>
-                    <Radio className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">No communities yet</h3>
-                  <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't joined any communities. Explore public communities or create your own.</p>
-                  <button onClick={() => navigate("/community")} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#8b5cf6" }}>
-                    Explore Communities
-                  </button>
-                </div>
-              )}
-              {communities.map((comm) => (
-                <div
-                  key={comm.id}
-                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
-                  style={{ border: "1px solid #f1f5f9" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-white font-bold"
-                        style={{ background: comm.color || "#1e3a8a" }}
-                      >
-                        {comm.avatar || comm.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span style={{ fontWeight: 700, color: "#0f172a" }}>
-                            {comm.name}
-                          </span>
-                          <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ background: "#f1f5f9", color: "#64748b" }}>
-                            {comm.type}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          Community Group
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => navigate(`/community/${comm.id}`)}
-                      className="text-xs px-4 py-2 rounded-lg text-white font-semibold transition-all hover:opacity-90 flex items-center gap-1.5"
-                      style={{ background: comm.color || "#1e3a8a" }}
-                    >
-                      <Radio className="w-3.5 h-3.5" /> Enter Community
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-
-
-        {/* Right column */}
-        <div className="space-y-5">
-          {/* Weekly Attendance Chart */}
-          <div
-            className="bg-white rounded-2xl p-5 shadow-sm"
-            style={{ border: "1px solid #f1f5f9" }}
-          >
-            <h3 className="mb-4" style={{ fontWeight: 700, color: "#0f172a" }}>
-              Weekly Attendance
-            </h3>
-
-            {engagementData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={140}>
-                <AreaChart
-                  data={engagementData}
-                  margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis
-                    dataKey="day"
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: 8,
-                      border: "1px solid #e2e8f0",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="students"
-                    stroke="#7c3aed"
-                    strokeWidth={2}
-                    fill="url(#gradBlue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-xs text-gray-400">
-                No attendance data available.
-              </p>
-            )}
-          </div>
-
-          {/* Recent Assignments */}
-          <div
-            className="bg-white rounded-2xl p-5 shadow-sm"
-            style={{ border: "1px solid #f1f5f9" }}
-          >
-            <h3 className="mb-4" style={{ fontWeight: 700, color: "#0f172a" }}>
-              Recent Assignments
-            </h3>
-
-            {recentAssignments.length > 0 ? (
-              <div className="space-y-4">
-                {recentAssignments.map((a) => (
-                  <div key={a.id}>
-                    <div className="flex items-start justify-between mb-1">
-                      <div>
-                        <div
-                          className="text-sm"
-                          style={{ fontWeight: 600, color: "#0f172a" }}
+                        )}
+                        <button
+                          onClick={() => navigate(`/classroom/${cls.code}`)}
+                          className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 transition-all hover:opacity-90"
+                          style={{ background: cls.color || '#1e3a8a' }}
                         >
-                          {a.title}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {a.class_name} · Due {a.due_date}
-                        </div>
+                          <Video className="w-3.5 h-3.5" />
+                          {cls.teacher_id === profile?.id ? "Start Class" : "Enter Class"}
+                        </button>
                       </div>
-                      <span className="text-xs text-gray-500">
-                        {a.submissions_count}/{a.total_students}
-                      </span>
-                    </div>
-                    <div
-                      className="h-1.5 rounded-full overflow-hidden"
-                      style={{ background: "#f1f5f9" }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${a.total_students > 0
-                            ? (a.submissions_count / a.total_students) * 100
-                            : 0
-                            }%`,
-                          background:
-                            "linear-gradient(90deg, #1e3a8a, #7c3aed)",
-                        }}
-                      />
                     </div>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400">No recent assignments.</p>
+              </>
             )}
-          </div>
 
-          {/* ── Modals ── */}
-
-          {/* Create Classroom Modal */}
-          {showCreateModal && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center"
-              style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
-              onClick={() => setShowCreateModal(false)}
-            >
-              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
-                <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create New Classroom</h2>
-                <p className="text-sm text-gray-400 mb-6">Students will join using the auto-generated class code.</p>
-                <div className="mb-4">
-                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Class Name</label>
-                  <input
-                    value={newClassName}
-                    onChange={(e) => setNewClassName(e.target.value)}
-                    placeholder="e.g. Introduction to Chemistry"
-                    className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
-                    style={{ borderColor: "#e2e8f0" }}
-                  />
-                </div>
-                <div className="mb-6">
-                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Primary Language</label>
-                  <select value={newClassLang} onChange={(e) => setNewClassLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
-                    <option>English</option>
-                    <option>Spanish</option>
-                    <option>French</option>
-                    <option>Mandarin</option>
-                  </select>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="flex-1 py-3 rounded-xl border text-sm"
-                    style={{ borderColor: "#e2e8f0", color: "#64748b" }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateClass}
-                    className="flex-1 py-3 rounded-xl text-white text-sm"
-                    style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
-                  >
-                    Create & Open
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Create Room Modal */}
-          {showCreateRoomModal && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center"
-              style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
-              onClick={() => setShowCreateRoomModal(false)}
-            >
-              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
-                  <Video className="w-6 h-6" />
-                </div>
-                <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create Online Room</h2>
-                <p className="text-sm text-gray-400 mb-6">A persistent room where students can request to join.</p>
-                <div className="mb-4">
-                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Room Name</label>
-                  <input
-                    value={newRoomName}
-                    onChange={(e) => setNewRoomName(e.target.value)}
-                    placeholder="e.g. Biology Study Room"
-                    className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
-                    style={{ borderColor: "#e2e8f0" }}
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Language</label>
-                  <select value={newRoomLang} onChange={(e) => setNewRoomLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
-                    <option value="English">English</option>
-                    <option value="Spanish">Spanish</option>
-                    <option value="French">French</option>
-                    <option value="Mandarin">Mandarin</option>
-                    <option value="Japanese">Japanese</option>
-                  </select>
-                </div>
-                <div className="mb-6 flex items-center gap-3">
-                  <button
-                    onClick={() => setNewRoomPrivate(!newRoomPrivate)}
-                    className="w-10 h-6 rounded-full transition-colors relative shrink-0"
-                    style={{ background: newRoomPrivate ? "#7c3aed" : "#e2e8f0" }}
-                  >
-                    <span
-                      className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
-                      style={{ left: newRoomPrivate ? "calc(100% - 1.35rem)" : "0.125rem" }}
-                    />
-                  </button>
-                  <span className="text-sm text-gray-600">Private room (students need approval to join)</span>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowCreateRoomModal(false)}
-                    className="flex-1 py-3 rounded-xl border text-sm"
-                    style={{ borderColor: "#e2e8f0", color: "#64748b" }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreateRoom}
-                    className="flex-1 py-3 rounded-xl text-white text-sm"
-                    style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
-                  >
-                    Create Room
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Join Class Modal */}
-          {showJoinModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowJoinModal(false)}>
-              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
-                  <Users className="w-7 h-7" />
-                </div>
-                <h2 className="mb-1" style={{ fontWeight: 800, color: "#0f172a" }}>Join a Classroom</h2>
-                <p className="text-sm text-gray-400 mb-6">Enter the class code your student or teacher shared with you.</p>
-                <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="e.g. BIO-4821" className="w-full px-4 py-3 rounded-xl border text-sm outline-none mb-3 text-center tracking-widest" style={{ borderColor: "#e2e8f0", fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.15em" }} />
-                <div className="mb-4">
-                  <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Preferred Language</label>
-                  <select value={preferredLang} onChange={(e) => setPreferredLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
-                    <option value="English">🇺🇸 English</option>
-                    <option value="Japanese">🇯🇵 Japanese</option>
-                    <option value="Spanish">🇪🇸 Spanish</option>
-                    <option value="French">🇫🇷 French</option>
-                    <option value="Portuguese">🇧🇷 Portuguese</option>
-                    <option value="German">🇩🇪 German</option>
-                    <option value="Mandarin">🇨🇳 Mandarin</option>
-                  </select>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowJoinModal(false)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
-                  <button onClick={handleJoinClassRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Join Classroom</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Private Room Join Request Modal */}
-          {showJoinRoomModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowJoinRoomModal(null)}>
-              <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
-                  <Radio className="w-7 h-7" />
-                </div>
-                <h2 className="mb-1" style={{ fontWeight: 800, color: "#0f172a" }}>Request to Join</h2>
-                <p className="text-sm" style={{ color: "#7c3aed", fontWeight: 600 }}>{showJoinRoomModal.name}</p>
-                <p className="text-sm text-gray-400 mt-1 mb-5">Your request will be sent to the host. You'll be admitted once approved.</p>
-                <div className="flex items-center gap-3 rounded-xl p-3 mb-5" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
-                  <Circle className="w-4 h-4 text-yellow-500" />
-                  <span className="text-xs text-yellow-700">Status will show as: Pending Approval</span>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowJoinRoomModal(null)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
-                  <button onClick={sendRoomRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Send Request</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-
-          {/* Communities */}
-          <div
-            className="rounded-2xl p-5"
-            style={{ background: "linear-gradient(135deg, #0f172a, #1e3a8a)" }}
-          >
-            <h3 className="text-white mb-1" style={{ fontWeight: 700 }}>
-              Communities
-            </h3>
-            <p className="text-xs text-blue-300 mb-4">
-              Your active learning communities
-            </p>
-
-            {communities.length > 0 ? (
-              communities.map((c) => (
-                <button
-                  key={c.code}
-                  onClick={() => navigate(`/community/${c.code}`)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1.5 transition-all hover:bg-white/10 text-left"
-                >
+            {activeTab === "rooms" && (
+              <>
+                {/* Dynamic Rooms */}
+                {rooms.length === 0 && (
+                  <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+                      <Radio className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">No persistent rooms</h3>
+                    <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't opened any persistent rooms. Persistent rooms are always available for students to request access.</p>
+                    <button onClick={() => setShowCreateRoomModal(true)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#1e3a8a" }}>
+                      Create Room
+                    </button>
+                  </div>
+                )}
+                {rooms.map((room) => (
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
-                    style={{ background: c.color, fontWeight: 700 }}
+                    key={room.id}
+                    className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                    style={{ border: "1px solid #f1f5f9" }}
                   >
-                    {c.name
-                      .split(" ")
-                      .filter((w: string) => w.length > 0) // remove empty strings
-                      .map((w: string) => w[0].toUpperCase()) // take first letter and uppercase
-                      .join("")
-                      .slice(0, 2)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="text-white text-xs truncate"
-                      style={{ fontWeight: 600 }}
-                    >
-                      {c.name}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                          style={{
+                            background: room.live
+                              ? "rgba(34,197,94,0.1)"
+                              : "#f1f5f9",
+                            color: room.live ? "#16a34a" : "#94a3b8",
+                          }}
+                        >
+                          <Radio className="w-5 h-5" />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                              {room.name}
+                            </span>
+                            <span
+                              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                background: room.live
+                                  ? "rgba(34,197,94,0.1)"
+                                  : "#f1f5f9",
+                                color: room.live ? "#16a34a" : "#94a3b8",
+                              }}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{
+                                  background: room.live ? "#22c55e" : "#94a3b8",
+                                }}
+                              />
+                              {room.live ? "Live" : "Offline"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5" />
+                              {room.participants || 0} participants
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {room.sessions || 0} sessions total
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        {room.teacher_id === profile?.id && room.pendingCount > 0 && (
+                          <button
+                            onClick={() => setShowAccessModal(true)}
+                            className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                            style={{
+                              background: "rgba(251,191,36,0.1)",
+                              color: "#d97706",
+                            }}
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Requests
+                          </button>
+                        )}
+                        {room.teacher_id === profile?.id ? (
+                          <>
+                            <button
+                              onClick={() => navigate(`/classroom/${room.id}`)}
+                              className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90"
+                              style={{ background: room.live ? "#16a34a" : "#1e3a8a" }}
+                            >
+                              <Video className="w-3.5 h-3.5" />
+                              {room.live ? "Enter Room" : "Start Class"}
+                            </button>
+                            <button
+                              className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-red-50 transition-colors"
+                              onClick={() => handleDeleteRoom(room.id)}
+                              style={{ border: "1px solid #fecaca", color: "#ef4444" }}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {roomStatuses[room.id] === "pending" ? (
+                              <button disabled className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5" style={{ background: "rgba(251,191,36,0.15)", color: "#d97706" }}>
+                                <Radio className="w-3.5 h-3.5" /> Pending
+                              </button>
+                            ) : roomStatuses[room.id] === "approved" ? (
+                              <button onClick={() => navigate(`/classroom/${room.id}`)} className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90" style={{ background: "#16a34a" }}>
+                                <Video className="w-3.5 h-3.5" /> Enter Room
+                              </button>
+                            ) : (
+                              <button onClick={() => handleRoomAction(room)} className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1.5 hover:opacity-90" style={{ background: room.is_private ? "#7c3aed" : "#1e3a8a" }}>
+                                {room.is_private ? <Lock className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+                                {room.is_private ? "Request to Join" : "Join Room"}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-blue-400 text-xs capitalize">
-                      {c.type}
-                    </div>
                   </div>
-                  {c.unread_count > 0 && (
-                    <span
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-white"
-                      style={{
-                        background: "#7c3aed",
-                        fontSize: "0.6rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {c.unread_count}
-                    </span>
-                  )}
-                </button>
-              ))
-            ) : (
-              <p className="text-xs text-blue-200">No communities yet.</p>
+                ))}
+              </>
             )}
 
-            {/* View All Communities */}
-            <button
-              onClick={() => navigate("/community")}
-              className="w-full mt-2 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5"
-              style={{
-                background: "rgba(255,255,255,0.08)",
-                color: "rgba(255,255,255,0.6)",
-              }}
-            >
-              View all communities <ChevronRight className="w-3 h-3" />
-            </button>
+            {activeTab === "communities" && (
+              <>
+                {communities.length === 0 && (
+                  <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(139,92,246,0.08)", color: "#8b5cf6" }}>
+                      <Radio className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">No communities yet</h3>
+                    <p className="text-sm text-gray-500 max-w-sm mb-4">You haven't joined any communities. Explore public communities or create your own.</p>
+                    <button onClick={() => navigate("/community")} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "#8b5cf6" }}>
+                      Explore Communities
+                    </button>
+                  </div>
+                )}
+                {communities.map((comm) => (
+                  <div
+                    key={comm.id}
+                    className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                    style={{ border: "1px solid #f1f5f9" }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-white font-bold"
+                          style={{ background: comm.color || "#1e3a8a" }}
+                        >
+                          {comm.avatar || comm.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                              {comm.name}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ background: "#f1f5f9", color: "#64748b" }}>
+                              {comm.type}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            Community Group
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/community/${comm.id}`)}
+                        className="text-xs px-4 py-2 rounded-lg text-white font-semibold transition-all hover:opacity-90 flex items-center gap-1.5"
+                        style={{ background: comm.color || "#1e3a8a" }}
+                      >
+                        <Radio className="w-3.5 h-3.5" /> Enter Community
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {activeTab === "materials" && (
+              <>
+                {materials.length === 0 && (
+                  <div className="mt-4 p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center" style={{ borderColor: "#cbd5e1" }}>
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(139,92,246,0.08)", color: "#8b5cf6" }}>
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">No materials added</h3>
+                    <p className="text-sm text-gray-500 max-w-sm mb-4">Add your first class link, document, or resource here.</p>
+                    <button onClick={() => setShowAddMaterialModal(true)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-opacity hover:opacity-90" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>
+                      Add Material
+                    </button>
+                  </div>
+                )}
+                {materials.map((m) => (
+                  <div key={m.id} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow mb-4" style={{ border: "1px solid #f1f5f9" }}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-white font-bold" style={{ background: "#1e3a8a" }}>
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontWeight: 700, color: "#0f172a" }}>{m.title}</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ background: "#f1f5f9", color: "#64748b" }}>
+                              {m.classes?.name || "Resource"}
+                            </span>
+                          </div>
+                          <a href={m.url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline mt-1 block">
+                            {m.url}
+                          </a>
+                        </div>
+                      </div>
+                      <button onClick={() => handleDeleteMaterial(m.id)} className="text-xs px-3 py-1.5 rounded-lg text-red-500 hover:bg-red-50 border border-red-200 transition-colors">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
+
+
+          {/* Right column */}
+          <div className="space-y-5">
+            {/* Weekly Attendance Chart */}
+            <div
+              className="bg-white rounded-2xl p-5 shadow-sm"
+              style={{ border: "1px solid #f1f5f9" }}
+            >
+              <h3 className="mb-4" style={{ fontWeight: 700, color: "#0f172a" }}>
+                Weekly Attendance
+              </h3>
+
+              {engagementData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={140}>
+                  <AreaChart
+                    data={engagementData}
+                    margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="day"
+                      tick={{ fontSize: 10, fill: "#94a3b8" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: "#94a3b8" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: 8,
+                        border: "1px solid #e2e8f0",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="students"
+                      stroke="#7c3aed"
+                      strokeWidth={2}
+                      fill="url(#gradBlue)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  No attendance data available.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Modals ── */}
+
+        {/* Add Material Modal */}
+        {showAddMaterialModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowAddMaterialModal(false)}>
+            <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+              <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Add Class Material</h2>
+              <div className="mb-4 mt-6">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Title</label>
+                <input value={newMaterial.title} onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })} placeholder="e.g. Week 1 Slides" className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }} />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Link / URL</label>
+                <input value={newMaterial.url} onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })} placeholder="https://..." className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }} />
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Select Class</label>
+                <select value={newMaterial.class_id} onChange={(e) => setNewMaterial({ ...newMaterial, class_id: e.target.value })} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                  <option value="">-- Choose Class --</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowAddMaterialModal(false)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
+                <button onClick={handleCreateMaterial} className="flex-1 py-3 rounded-xl text-white text-sm" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Add Link</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Create Classroom Modal */}
+        {showCreateModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+            onClick={() => setShowCreateModal(false)}
+          >
+            <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+              <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create New Classroom</h2>
+              <p className="text-sm text-gray-400 mb-6">Students will join using the auto-generated class code.</p>
+              <div className="mb-4">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Class Name</label>
+                <input
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  placeholder="e.g. Introduction to Chemistry"
+                  className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
+                  style={{ borderColor: "#e2e8f0" }}
+                />
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Primary Language</label>
+                <select value={newClassLang} onChange={(e) => setNewClassLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                  <option>English</option>
+                  <option>Spanish</option>
+                  <option>French</option>
+                  <option>Mandarin</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 py-3 rounded-xl border text-sm"
+                  style={{ borderColor: "#e2e8f0", color: "#64748b" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateClass}
+                  className="flex-1 py-3 rounded-xl text-white text-sm"
+                  style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+                >
+                  Create & Open
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Create Room Modal */}
+        {showCreateRoomModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+            onClick={() => setShowCreateRoomModal(false)}
+          >
+            <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+                <Video className="w-6 h-6" />
+              </div>
+              <h2 className="mb-2" style={{ fontWeight: 800, color: "#0f172a" }}>Create Online Room</h2>
+              <p className="text-sm text-gray-400 mb-6">A persistent room where students can request to join.</p>
+              <div className="mb-4">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Room Name</label>
+                <input
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  placeholder="e.g. Biology Study Room"
+                  className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
+                  style={{ borderColor: "#e2e8f0" }}
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Language</label>
+                <select value={newRoomLang} onChange={(e) => setNewRoomLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                  <option value="English">English</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="French">French</option>
+                  <option value="Mandarin">Mandarin</option>
+                  <option value="Japanese">Japanese</option>
+                </select>
+              </div>
+              <div className="mb-6 flex items-center gap-3">
+                <button
+                  onClick={() => setNewRoomPrivate(!newRoomPrivate)}
+                  className="w-10 h-6 rounded-full transition-colors relative shrink-0"
+                  style={{ background: newRoomPrivate ? "#7c3aed" : "#e2e8f0" }}
+                >
+                  <span
+                    className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                    style={{ left: newRoomPrivate ? "calc(100% - 1.35rem)" : "0.125rem" }}
+                  />
+                </button>
+                <span className="text-sm text-gray-600">Private room (students need approval to join)</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCreateRoomModal(false)}
+                  className="flex-1 py-3 rounded-xl border text-sm"
+                  style={{ borderColor: "#e2e8f0", color: "#64748b" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateRoom}
+                  className="flex-1 py-3 rounded-xl text-white text-sm"
+                  style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+                >
+                  Create Room
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Join Class Modal */}
+        {showJoinModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowJoinModal(false)}>
+            <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
+                <Users className="w-7 h-7" />
+              </div>
+              <h2 className="mb-1" style={{ fontWeight: 800, color: "#0f172a" }}>Join a Classroom</h2>
+              <p className="text-sm text-gray-400 mb-6">Enter the class code your student or teacher shared with you.</p>
+              <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="e.g. BIO-4821" className="w-full px-4 py-3 rounded-xl border text-sm outline-none mb-3 text-center tracking-widest" style={{ borderColor: "#e2e8f0", fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.15em" }} />
+              <div className="mb-4">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Preferred Language</label>
+                <select value={preferredLang} onChange={(e) => setPreferredLang(e.target.value)} className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }}>
+                  <option value="English">🇺🇸 English</option>
+                  <option value="Japanese">🇯🇵 Japanese</option>
+                  <option value="Spanish">🇪🇸 Spanish</option>
+                  <option value="French">🇫🇷 French</option>
+                  <option value="Portuguese">🇧🇷 Portuguese</option>
+                  <option value="German">🇩🇪 German</option>
+                  <option value="Mandarin">🇨🇳 Mandarin</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowJoinModal(false)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
+                <button onClick={handleJoinClassRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Join Classroom</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Private Room Join Request Modal */}
+        {showJoinRoomModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setShowJoinRoomModal(null)}>
+            <div className="bg-white rounded-2xl p-8 shadow-2xl" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(30,58,138,0.08)", color: "#1e3a8a" }}>
+                <Radio className="w-7 h-7" />
+              </div>
+              <h2 className="mb-1" style={{ fontWeight: 800, color: "#0f172a" }}>Request to Join</h2>
+              <p className="text-sm" style={{ color: "#7c3aed", fontWeight: 600 }}>{showJoinRoomModal.name}</p>
+              <p className="text-sm text-gray-400 mt-1 mb-5">Your request will be sent to the host. You'll be admitted once approved.</p>
+              <div className="flex items-center gap-3 rounded-xl p-3 mb-5" style={{ background: "#fffbeb", border: "1px solid #fde68a" }}>
+                <Circle className="w-4 h-4 text-yellow-500" />
+                <span className="text-xs text-yellow-700">Status will show as: Pending Approval</span>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowJoinRoomModal(null)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
+                <button onClick={sendRoomRequest} className="flex-1 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Send Request</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* Communities */}
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: "linear-gradient(135deg, #0f172a, #1e3a8a)" }}
+        >
+          <h3 className="text-white mb-1" style={{ fontWeight: 700 }}>
+            Communities
+          </h3>
+          <p className="text-xs text-blue-300 mb-4">
+            Your active learning communities
+          </p>
+
+          {communities.length > 0 ? (
+            communities.map((c) => (
+              <button
+                key={c.code}
+                onClick={() => navigate(`/community/${c.code}`)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1.5 transition-all hover:bg-white/10 text-left"
+              >
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
+                  style={{ background: c.color, fontWeight: 700 }}
+                >
+                  {c.name
+                    ?.split(" ")
+                    .filter((w: string) => w.length > 0)
+                    .map((w: string) => w[0].toUpperCase())
+                    .join("")
+                    .slice(0, 2)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="text-white text-xs truncate"
+                    style={{ fontWeight: 600 }}
+                  >
+                    {c.name}
+                  </div>
+                  <div className="text-blue-400 text-xs capitalize">
+                    {c.type}
+                  </div>
+                </div>
+                {c.unread_count > 0 && (
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-white"
+                    style={{
+                      background: "#7c3aed",
+                      fontSize: "0.6rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {c.unread_count}
+                  </span>
+                )}
+              </button>
+            ))
+          ) : (
+            <p className="text-xs text-blue-200">No communities yet.</p>
+          )}
+
+          {/* View All Communities */}
+          <button
+            onClick={() => navigate("/community")}
+            className="w-full mt-2 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.6)",
+            }}
+          >
+            View all communities <ChevronRight className="w-3 h-3" />
+          </button>
         </div>
       </main>
     </div>
