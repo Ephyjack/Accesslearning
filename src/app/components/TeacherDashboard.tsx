@@ -6,7 +6,6 @@ import {
   Plus,
   Copy,
   Users,
-  BarChart2,
   BookOpen,
   Clock,
   Video,
