@@ -508,14 +508,21 @@ export function StudentDashboard() {
                       </button>
                       <button
                         onClick={async () => {
-                          if (sent || !profile) return;
-                          
+                          if (!profile) return;
+
+                          if (sent) {
+                            if (!confirm("Are you sure you want to cancel this request?")) return;
+                            await supabase.from("teacher_requests").delete().match({ student_id: profile.id, teacher_id: t.id });
+                            setLearnRequestSent(prev => ({ ...prev, [t.id]: false }));
+                            return;
+                          }
+
                           // 1. Insert Request
                           await supabase.from("teacher_requests").upsert({
                             student_id: profile.id, teacher_id: t.id, status: "pending",
                             updated_at: new Date().toISOString(),
                           }, { onConflict: "student_id,teacher_id" });
-                          
+
                           // 2. Insert Realtime Notification for Teacher
                           await supabase.from("notifications").insert({
                             user_id: t.id,
@@ -527,11 +534,10 @@ export function StudentDashboard() {
 
                           setLearnRequestSent(prev => ({ ...prev, [t.id]: true }));
                         }}
-                        disabled={sent}
-                        className="flex-1 py-2 rounded-xl text-white text-xs font-semibold hover:opacity-90 transition-opacity"
-                        style={{ background: sent ? "#e2e8f0" : `linear-gradient(135deg,#1e3a8a,#7c3aed)`, color: sent ? "#94a3b8" : "white" }}
+                        className="flex-1 py-2 rounded-xl text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-1"
+                        style={{ background: sent ? "rgba(239,68,68,0.1)" : `linear-gradient(135deg,#1e3a8a,#7c3aed)`, color: sent ? "#ef4444" : "white" }}
                       >
-                        {sent ? "Requested ✓" : "Connect"}
+                        {sent ? <><X className="w-3.5 h-3.5" /> Cancel</> : "Connect"}
                       </button>
                     </div>
                   </div>

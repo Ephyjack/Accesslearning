@@ -14,9 +14,9 @@ const pickColor = (s: string) => COLORS[(s?.charCodeAt(0) ?? 0) % COLORS.length]
 
 const STYLE_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
   interactive: { label: "Interactive", icon: "💬", desc: "Q&A and discussions" },
-  lecture:     { label: "Lecture-based", icon: "📢", desc: "Structured delivery" },
-  project:     { label: "Project-based", icon: "🔨", desc: "Hands-on learning" },
-  socratic:    { label: "Socratic", icon: "🤔", desc: "Question-driven" },
+  lecture: { label: "Lecture-based", icon: "📢", desc: "Structured delivery" },
+  project: { label: "Project-based", icon: "🔨", desc: "Hands-on learning" },
+  socratic: { label: "Socratic", icon: "🤔", desc: "Question-driven" },
 };
 
 function Stars({ rating }: { rating: number }) {
@@ -233,6 +233,25 @@ export function PublicTeacherProfile() {
     if (error) alert("Failed to send request: " + error.message);
   };
 
+  const cancelRequest = async () => {
+    if (!myProfile || !teacherId) return;
+    if (!confirm("Are you sure you want to cancel this request?")) return;
+    setReqStatus("sending");
+
+    const { error } = await supabase
+      .from("teacher_requests")
+      .delete()
+      .eq("student_id", myProfile.id)
+      .eq("teacher_id", teacherId);
+
+    if (error) {
+      alert("Failed to cancel request: " + error.message);
+      setReqStatus("pending");
+    } else {
+      setReqStatus("idle");
+    }
+  };
+
   const copyProfileLink = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopiedId(true);
@@ -282,8 +301,12 @@ export function PublicTeacherProfile() {
       </button>
     );
     if (reqStatus === "pending") return (
-      <button disabled className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold" style={{ background: "rgba(251,191,36,0.12)", color: "#d97706" }}>
-        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Request Pending
+      <button
+        onClick={cancelRequest}
+        className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
+        style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}
+      >
+        <X className="w-3.5 h-3.5" /> Cancel Request
       </button>
     );
     if (reqStatus === "accepted") return (
@@ -309,13 +332,22 @@ export function PublicTeacherProfile() {
       <div style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e3a8a 60%,#4c1d95 100%)", paddingBottom: "80px" }}>
         <div className="max-w-4xl mx-auto px-4 pt-8">
           <div className="flex items-center justify-between mb-8">
-            <button
-              onClick={() => navigate("/explore/teachers")}
-              className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
-              style={{ color: "rgba(255,255,255,0.6)" }}
-            >
-              <ArrowLeft className="w-4 h-4" /> All Teachers
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate("/")}
+                className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
+                style={{ color: "rgba(255,255,255,0.6)" }}
+              >
+                <ArrowLeft className="w-4 h-4" /> Dashboard
+              </button>
+              <button
+                onClick={() => navigate("/explore/teachers")}
+                className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
+                style={{ color: "rgba(255,255,255,0.6)" }}
+              >
+                <Users className="w-4 h-4" /> All Teachers
+              </button>
+            </div>
             <button
               onClick={copyProfileLink}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all"

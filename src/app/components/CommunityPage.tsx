@@ -551,7 +551,7 @@ export function CommunityPage() {
 
       {/* ── Community Rail ── */}
       <div className="hidden md:flex w-[68px] flex-col items-center py-3 gap-1 shrink-0 overflow-y-auto" style={{ background: S.rail, borderRight: `1px solid ${S.border}` }}>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-2 shrink-0 cursor-pointer" style={{ background: "linear-gradient(135deg,#1e3a8a,#7c3aed)" }} onClick={() => navigate("/teacher")}>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-2 shrink-0 cursor-pointer" style={{ background: "linear-gradient(135deg,#1e3a8a,#7c3aed)" }} onClick={() => navigate("/")}>
           <GraduationCap className="w-5 h-5 text-white" />
         </div>
         <div className="w-8 h-px mb-1" style={{ background: S.border }} />
@@ -681,6 +681,9 @@ export function CommunityPage() {
                 <button onClick={() => { setShowExplore(true); searchComms(); }} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm" style={{ background: "rgba(88,166,255,0.1)", color: "#58a6ff", border: "1px solid rgba(88,166,255,0.2)" }}><Search className="w-4 h-4" />Explore</button>
                 <button onClick={() => setShowJoin(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm" style={{ background: "rgba(124,58,237,0.1)", color: "#c4b5fd", border: "1px solid rgba(124,58,237,0.2)" }}><Key className="w-4 h-4" />Join with Code</button>
               </div>
+              <div className="mt-8">
+                <button onClick={() => navigate("/")} className="px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-80 transition-opacity" style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}>Back to Dashboard</button>
+              </div>
             </div>
           ) : !activeChId ? (
             /* No Channel Selected */
@@ -688,13 +691,15 @@ export function CommunityPage() {
               <MessageSquare className="w-14 h-14 mb-4" style={{ color: S.sub }} />
               <h3 className="text-lg font-bold mb-1" style={{ color: S.text }}>{activeCommunity?.name}</h3>
               <p className="text-sm" style={{ color: S.sub }}>Select a channel to start chatting</p>
-              <button className="md:hidden mt-4 px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: "rgba(124,58,237,0.15)", color: "#c4b5fd" }} onClick={() => setSidebarOpen(true)}>Open Channels</button>
+              <button className="md:hidden mt-4 px-4 py-2 rounded-xl text-sm font-semibold mb-2" style={{ background: "rgba(124,58,237,0.15)", color: "#c4b5fd" }} onClick={() => setSidebarOpen(true)}>Open Channels</button>
+              <button className="px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity" style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)" }} onClick={() => navigate("/")}>Dashboard</button>
             </div>
           ) : (
             <>
               {/* Chat Header */}
               <div className="h-14 flex items-center justify-between px-4 shrink-0" style={{ borderBottom: `1px solid ${S.border}`, background: "rgba(14,17,23,0.97)", backdropFilter: "blur(8px)" }}>
                 <div className="flex items-center gap-2 min-w-0">
+                  <button className="md:hidden p-1.5 rounded-lg mr-1 cursor-pointer" style={{ color: S.sub }} onClick={() => navigate("/")} title="Dashboard"><GraduationCap className="w-5 h-5" /></button>
                   <button className="md:hidden p-1.5 rounded-lg mr-1" style={{ color: S.sub }} onClick={() => setSidebarOpen(true)}><Menu className="w-5 h-5" /></button>
                   <span style={{ color: S.sub }}>{chanIcon(activeChannel?.channel_type || "text")}</span>
                   <span className="font-bold text-sm truncate" style={{ color: S.text }}>{activeChannel?.name}</span>

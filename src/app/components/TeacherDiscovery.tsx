@@ -68,12 +68,14 @@ function TeacherCard({
   reqStatus,
   myProfile,
   onRequest,
+  onCancel,
   onViewProfile,
 }: {
   teacher: Teacher;
   reqStatus: string;
   myProfile: any;
   onRequest: (t: Teacher) => void;
+  onCancel: (id: string) => void;
   onViewProfile: (id: string) => void;
 }) {
   const color = pickColor(teacher.full_name);
@@ -86,8 +88,12 @@ function TeacherCard({
       </button>
     );
     if (reqStatus === "pending") return (
-      <button disabled className="w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2" style={{ background: "rgba(251,191,36,0.12)", color: "#d97706" }}>
-        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Pending…
+      <button
+        onClick={() => onCancel(teacher.id)}
+        className="w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:opacity-80 transition-opacity"
+        style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}
+      >
+        <X className="w-3.5 h-3.5" /> Cancel Request
       </button>
     );
     if (reqStatus === "accepted") return (
@@ -392,6 +398,30 @@ export function TeacherDiscovery() {
     if (error) alert("Failed to send request: " + error.message);
   };
 
+  const cancelRequest = async (teacherId: string) => {
+    if (!myProfile) return;
+    if (!confirm("Are you sure you want to cancel this request?")) return;
+
+    setRequestStatuses(prev => ({ ...prev, [teacherId]: "sending" }));
+
+    const { error } = await supabase
+      .from("teacher_requests")
+      .delete()
+      .eq("student_id", myProfile.id)
+      .eq("teacher_id", teacherId);
+
+    if (error) {
+      alert("Failed to cancel request: " + error.message);
+      setRequestStatuses(prev => ({ ...prev, [teacherId]: "pending" }));
+    } else {
+      setRequestStatuses(prev => {
+        const next = { ...prev };
+        delete next[teacherId];
+        return next;
+      });
+    }
+  };
+
   const clearFilters = () => {
     setFilterSubject(""); setFilterCountry(""); setFilterStyle(""); setSearchQ("");
   };
@@ -407,7 +437,7 @@ export function TeacherDiscovery() {
       <div style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e3a8a 60%,#4c1d95 100%)" }}>
         <div className="max-w-6xl mx-auto px-4 py-10 lg:py-14">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/")}
             className="flex items-center gap-2 text-sm mb-6 hover:opacity-80 transition-opacity"
             style={{ color: "rgba(255,255,255,0.6)" }}
           >
@@ -575,6 +605,7 @@ export function TeacherDiscovery() {
                 reqStatus={requestStatuses[t.id] || "idle"}
                 myProfile={myProfile}
                 onRequest={t2 => setRequestModal(t2)}
+                onCancel={cancelRequest}
                 onViewProfile={id => navigate(`/profile/${id}`)}
               />
             ))}
