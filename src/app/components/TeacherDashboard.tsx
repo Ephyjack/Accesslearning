@@ -774,7 +774,7 @@ export function TeacherDashboard() {
                     activeTab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
                 }}
               >
-                {t === "classes" ? "Classrooms" : t === "rooms" ? "Persistent Rooms" : "Communities"}
+                {t === "classes" ? "Classrooms" : t === "rooms" ? "Persistent Rooms" : t === "communities" ? "Communities" : "Materials"}
               </button>
             ))}
           </div>
