@@ -5,7 +5,7 @@ import {
   GraduationCap, BookOpen, Clock, Video, FileText, CheckCircle2,
   Search, Plus, Play, Users, Calendar, Layers, LogOut,
   Settings, Languages, Headphones, Upload, Radio, Circle, Hash,
-  Lock, Menu, X, Star, ArrowRight, Sparkles
+  Lock, Menu, X, Star, ArrowRight, Sparkles, RefreshCw
 } from "lucide-react";
 import { AIAssistant } from "./AIAssistant";
 import { NotificationBell } from "./NotificationBell";
@@ -341,8 +341,22 @@ export function StudentDashboard() {
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="text-xs px-2 py-1 rounded-full inline-block w-fit" style={{ background: "rgba(37,99,235,0.3)", color: "#93c5fd" }}>
-            Student Account
+          <div className="flex flex-col gap-2">
+            <div className="text-xs px-3 py-1.5 rounded-full inline-flex w-fit font-semibold" style={{ background: "rgba(37,99,235,0.2)", color: "#60a5fa" }}>
+              Student Account
+            </div>
+
+            {/* Dual-role Switcher */}
+            {profile?.is_also_learner && (
+              <button
+                onClick={() => navigate("/teacher")}
+                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full w-fit hover:opacity-80 transition-all"
+                style={{ background: "rgba(124,58,237,0.2)", color: "#a78bfa", border: "1px solid rgba(124,58,237,0.3)" }}
+              >
+                <RefreshCw className="w-3 h-3" />
+                Switch to Educator Mode
+              </button>
+            )}
           </div>
         </div>
 

@@ -30,7 +30,8 @@ import {
   Lock,
   Trash2,
   Menu, X, Circle,
-  UserPlus
+  UserPlus,
+  RefreshCw
 } from "lucide-react";
 import { AIAssistant } from "./AIAssistant";
 import { NotificationBell } from "./NotificationBell";
@@ -536,13 +537,25 @@ export function TeacherDashboard() {
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div
-            className="text-xs px-2 py-1 rounded-full inline-block w-fit"
-            style={{ background: "rgba(124,58,237,0.25)", color: "#c4b5fd" }}
-          >
-            {profile?.role === "teacher"
-              ? "Teacher Account"
-              : "Student Account"}
+          <div className="flex flex-col gap-2">
+            <div
+              className="text-xs px-3 py-1.5 rounded-full inline-flex w-fit font-semibold"
+              style={{ background: "rgba(124,58,237,0.25)", color: "#c4b5fd" }}
+            >
+              {profile?.role === "teacher" ? "Educator Account" : "Student Account"}
+            </div>
+
+            {/* Dual-role Switcher */}
+            {profile?.is_also_learner && (
+              <button
+                onClick={() => navigate("/student")}
+                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full w-fit hover:opacity-80 transition-all"
+                style={{ background: "rgba(5,150,105,0.2)", color: "#34d399", border: "1px solid rgba(5,150,105,0.3)" }}
+              >
+                <RefreshCw className="w-3 h-3" />
+                Switch to Learner Mode
+              </button>
+            )}
           </div>
         </div>
 

@@ -292,7 +292,7 @@ export function LandingPage() {
                   color: "#0f172a",
                 }}
               >
-                Education{" "}
+                Your Knowledge{" "}
                 <span
                   style={{
                     background: "linear-gradient(135deg, #1e3a8a 0%, #7c3aed 100%)",
@@ -300,16 +300,14 @@ export function LandingPage() {
                     WebkitTextFillColor: "transparent",
                   }}
                 >
-                  Without Barriers
+                  Has an Audience
                 </span>
               </h1>
               <p
                 className="mb-10 max-w-xl mx-auto lg:mx-0"
                 style={{ fontSize: "1.125rem", color: "#475569", lineHeight: 1.7 }}
               >
-                Access Learn uses AI to translate lectures in real time, generate
-                searchable transcripts, and connect students globally — regardless of
-                language or location.
+                Access Learn empowers teachers, mentors, tutors, and creators to host live sessions, translate instantly, build communities, and reach students globally.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <button
@@ -321,7 +319,7 @@ export function LandingPage() {
                   }}
                 >
                   <BookOpen className="w-5 h-5" />
-                  Start Teaching
+                  Start Sharing
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <button
@@ -330,7 +328,7 @@ export function LandingPage() {
                   style={{ borderColor: "#1e3a8a", color: "#1e3a8a" }}
                 >
                   <Users className="w-5 h-5" />
-                  Join a Class
+                  Start Learning
                 </button>
               </div>
 
@@ -592,6 +590,43 @@ export function LandingPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Who's It For Section (Personas) */}
+      <section className="py-24" style={{ background: "#f8faff" }}>
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <span
+              className="text-sm px-3 py-1 rounded-full"
+              style={{ background: "rgba(5,150,105,0.1)", color: "#059669" }}
+            >
+              Who is it for?
+            </span>
+            <h2 className="mt-4" style={{ fontSize: "2.25rem", fontWeight: 800, color: "#0f172a" }}>
+              Built for every kind of educator
+            </h2>
+            <p className="mt-3 text-gray-500 max-w-xl mx-auto">
+              From traditional classrooms to modern skill-building communities, AccessLearn adapts to your teaching style.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { emoji: "🏫", title: "School Teachers", desc: "Real-time translated classrooms for diverse and inclusive learning." },
+              { emoji: "🎓", title: "University Professors", desc: "Host lectures, assign work, and manage large remote cohorts easily." },
+              { emoji: "💻", title: "Tech Tutors", desc: "Coding bootcamps, live pair sessions, and dedicated tech community rooms." },
+              { emoji: "📈", title: "Trading Mentors", desc: "Replace scattered Telegram groups with structured learning hubs and live streams." },
+              { emoji: "🎨", title: "Creative Coaches", desc: "UI/UX, design, and content creation workshops with interactive tools." },
+              { emoji: "🤝", title: "Peer Educators", desc: "Students sharing knowledge with peers while managing their own learning journey." },
+            ].map((persona, i) => (
+              <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border transition-shadow hover:shadow-md" style={{ borderColor: "#f1f5f9" }}>
+                <div className="text-3xl mb-3">{persona.emoji}</div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">{persona.title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{persona.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

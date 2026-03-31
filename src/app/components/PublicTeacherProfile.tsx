@@ -17,6 +17,37 @@ const STYLE_LABELS: Record<string, { label: string; icon: string; desc: string }
   lecture: { label: "Lecture-based", icon: "📢", desc: "Structured delivery" },
   project: { label: "Project-based", icon: "🔨", desc: "Hands-on learning" },
   socratic: { label: "Socratic", icon: "🤔", desc: "Question-driven" },
+  workshop: { label: "Workshop", icon: "🛠️", desc: "Live exercises" },
+  mentorship: { label: "Mentorship", icon: "🤝", desc: "Personalised support" },
+};
+
+const EDUCATOR_TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
+  academic: { label: "Academic Educator", icon: "🏫", color: "#1e3a8a" },
+  skills_tutor: { label: "Skills Tutor", icon: "💻", color: "#7c3aed" },
+  professional_trainer: { label: "Professional Trainer", icon: "📈", color: "#059669" },
+  peer_educator: { label: "Peer Educator", icon: "🤝", color: "#d97706" },
+  mentor_coach: { label: "Mentor / Coach", icon: "🎯", color: "#dc2626" },
+  content_creator: { label: "Content Creator", icon: "🎬", color: "#0891b2" },
+};
+
+const LEARNER_LEVEL_LABELS: Record<string, string> = {
+  high_school: "High School",
+  undergraduate: "Undergraduate",
+  postgraduate: "Postgraduate",
+  doctorate: "Doctorate / PhD",
+  professional: "Working Professional",
+  self_learner: "Self-Learner",
+};
+
+const FIELD_META: Record<string, { label: string; icon: string }> = {
+  tech_development: { label: "Tech & Dev", icon: "💻" },
+  finance_trading: { label: "Finance & Trading", icon: "📈" },
+  design_creative: { label: "Design & Creative", icon: "🎨" },
+  business_marketing: { label: "Business & Marketing", icon: "📊" },
+  sciences_health: { label: "Sciences & Health", icon: "🔬" },
+  languages_arts: { label: "Languages & Arts", icon: "🌍" },
+  academic_research: { label: "Academic", icon: "🎓" },
+  personal_development: { label: "Personal Growth", icon: "🎯" },
 };
 
 function Stars({ rating }: { rating: number }) {
@@ -135,6 +166,7 @@ export function PublicTeacherProfile() {
   const { id: teacherId } = useParams<{ id: string }>();
 
   const [myProfile, setMyProfile] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>("student");
   const [teacher, setTeacher] = useState<any>(null);
   const [communities, setCommunities] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
@@ -152,7 +184,10 @@ export function PublicTeacherProfile() {
       const user = session?.user;
       if (!user) { navigate("/"); return; }
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (prof) setMyProfile(prof);
+      if (prof) {
+        setMyProfile(prof);
+        setUserRole(prof.role || "student");
+      }
 
       // Existing request status
       if (teacherId) {
@@ -174,7 +209,7 @@ export function PublicTeacherProfile() {
       setLoading(true);
       const { data: t, error } = await supabase
         .from("profiles")
-        .select("id, full_name, bio, avatar_url, country, school, subjects, teaching_style, rating, review_count, is_public")
+        .select("id, full_name, bio, avatar_url, country, school, subjects, teaching_style, rating, review_count, is_public, educator_type, field_category, headline, is_also_learner, learner_level")
         .eq("id", teacherId)
         .eq("role", "teacher")
         .single();
@@ -334,7 +369,7 @@ export function PublicTeacherProfile() {
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => navigate("/")}
+                onClick={() => navigate(userRole === "teacher" ? "/teacher" : "/student")}
                 className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
                 style={{ color: "rgba(255,255,255,0.6)" }}
               >
@@ -345,7 +380,7 @@ export function PublicTeacherProfile() {
                 className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
                 style={{ color: "rgba(255,255,255,0.6)" }}
               >
-                <Users className="w-4 h-4" /> All Teachers
+                <Users className="w-4 h-4" /> All Educators
               </button>
             </div>
             <button
@@ -379,6 +414,37 @@ export function PublicTeacherProfile() {
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
                   <h1 className="text-2xl font-black text-gray-900 mb-1">{teacher.full_name}</h1>
+
+                  {/* Headline */}
+                  {teacher.headline && (
+                    <p className="text-sm text-gray-500 mb-2 italic">{teacher.headline}</p>
+                  )}
+
+                  {/* Type + Field badges */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {teacher.educator_type && EDUCATOR_TYPE_META[teacher.educator_type] && (() => {
+                      const m = EDUCATOR_TYPE_META[teacher.educator_type];
+                      return (
+                        <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                          style={{ background: `${m.color}12`, color: m.color }}>
+                          {m.icon} {m.label}
+                        </span>
+                      );
+                    })()}
+                    {teacher.field_category && FIELD_META[teacher.field_category] && (
+                      <span className="text-xs px-2.5 py-1 rounded-full"
+                        style={{ background: "#f1f5f9", color: "#64748b" }}>
+                        {FIELD_META[teacher.field_category].icon} {FIELD_META[teacher.field_category].label}
+                      </span>
+                    )}
+                    {teacher.is_also_learner && (
+                      <span className="text-xs px-2.5 py-1 rounded-full"
+                        style={{ background: "rgba(5,150,105,0.08)", color: "#059669" }}>
+                        📚 Also a Learner
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mb-3">
                     {teacher.school && (
                       <span className="flex items-center gap-1.5">
@@ -425,18 +491,30 @@ export function PublicTeacherProfile() {
           {/* Subjects */}
           {teacher.subjects && teacher.subjects.length > 0 && (
             <div className="mt-5">
-              <h3 className="text-sm font-bold text-gray-900 mb-3">Subjects Taught</h3>
+              <h3 className="text-sm font-bold text-gray-900 mb-3">
+                {teacher.educator_type === "peer_educator" ? "Topics Covered" : "Subjects / Topics"}
+              </h3>
               <div className="flex flex-wrap gap-2">
                 {teacher.subjects.map((s: string) => (
-                  <span
-                    key={s}
-                    className="text-sm px-3 py-1.5 rounded-full font-medium"
-                    style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}
-                  >
-                    {s}
-                  </span>
+                  <span key={s} className="text-sm px-3 py-1.5 rounded-full font-medium"
+                    style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>{s}</span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Dual-role: Also a Learner section */}
+          {teacher.is_also_learner && teacher.learner_level && (
+            <div className="mt-5 p-4 rounded-xl" style={{ background: "rgba(5,150,105,0.04)", border: "1px solid rgba(5,150,105,0.15)" }}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">📚</span>
+                <span className="text-sm font-bold" style={{ color: "#059669" }}>Also a Learner</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                {teacher.full_name?.split(" ")[0]} is also learning as a{" "}
+                <strong>{LEARNER_LEVEL_LABELS[teacher.learner_level] || teacher.learner_level}</strong>.
+                They understand what it's like to be on both sides of the classroom.
+              </p>
             </div>
           )}
         </div>
@@ -534,9 +612,9 @@ export function PublicTeacherProfile() {
         {communities.length === 0 && rooms.length === 0 && (
           <div className="bg-white rounded-2xl shadow-sm p-8 text-center mb-6" style={{ border: "1px solid #f1f5f9" }}>
             <MessageSquare className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 text-sm">This teacher doesn't have any public communities or rooms yet.</p>
+            <p className="text-gray-500 text-sm">This educator doesn't have any public communities or rooms yet.</p>
             {!isSelf && (
-              <p className="text-xs text-gray-400 mt-2">Send a request to learn from them directly!</p>
+              <p className="text-xs text-gray-400 mt-2">Send a connection request to learn from them directly!</p>
             )}
           </div>
         )}
@@ -546,7 +624,7 @@ export function PublicTeacherProfile() {
             onClick={() => navigate("/explore/teachers")}
             className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
           >
-            ← Browse more teachers
+            ← Browse more educators
           </button>
         </div>
       </div>
