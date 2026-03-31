@@ -217,7 +217,7 @@ export function TeacherDashboard() {
   const acceptLearnRequest = async (reqId: string, studentId: string) => {
     await supabase.from("teacher_requests").update({ status: "accepted", updated_at: new Date().toISOString() }).eq("id", reqId);
     setTeacherRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: "accepted" } : r));
-    
+
     // Notify student
     if (profile) {
       await supabase.from("notifications").insert({
@@ -1417,6 +1417,79 @@ export function TeacherDashboard() {
                 </p>
               )}
             </div>
+
+            {/* Communities Widget */}
+            <div
+              className="rounded-2xl p-5 shadow-lg"
+              style={{ background: "linear-gradient(135deg, #0f172a, #1e3a8a)" }}
+            >
+              <h3 className="text-white mb-1" style={{ fontWeight: 700 }}>
+                Communities
+              </h3>
+              <p className="text-xs text-blue-300 mb-4">
+                Your active learning communities
+              </p>
+
+              {communities.length > 0 ? (
+                communities.map((c) => (
+                  <button
+                    key={c.code}
+                    onClick={() => navigate(`/community/${c.code}`)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1.5 transition-all hover:bg-white/10 text-left cursor-pointer"
+                  >
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
+                      style={{ background: c.color, fontWeight: 700 }}
+                    >
+                      {c.name
+                        ?.split(" ")
+                        .filter((w: string) => w.length > 0)
+                        .map((w: string) => w[0].toUpperCase())
+                        .join("")
+                        .slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="text-white text-xs truncate"
+                        style={{ fontWeight: 600 }}
+                      >
+                        {c.name}
+                      </div>
+                      <div className="text-blue-400 text-xs capitalize">
+                        {c.type}
+                      </div>
+                    </div>
+                    {c.unread_count > 0 && (
+                      <span
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-white"
+                        style={{
+                          background: "#7c3aed",
+                          fontSize: "0.6rem",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {c.unread_count}
+                      </span>
+                    )}
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-blue-200">No communities yet.</p>
+              )}
+
+              {/* View All Communities */}
+              <button
+                onClick={() => navigate("/community")}
+                className="w-full mt-2 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-white/20 transition-colors"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "white",
+                  fontWeight: 600
+                }}
+              >
+                View all communities <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1618,77 +1691,6 @@ export function TeacherDashboard() {
         )}
 
 
-        {/* Communities */}
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: "linear-gradient(135deg, #0f172a, #1e3a8a)" }}
-        >
-          <h3 className="text-white mb-1" style={{ fontWeight: 700 }}>
-            Communities
-          </h3>
-          <p className="text-xs text-blue-300 mb-4">
-            Your active learning communities
-          </p>
-
-          {communities.length > 0 ? (
-            communities.map((c) => (
-              <button
-                key={c.code}
-                onClick={() => navigate(`/community/${c.code}`)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1.5 transition-all hover:bg-white/10 text-left"
-              >
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-xs text-white shrink-0"
-                  style={{ background: c.color, fontWeight: 700 }}
-                >
-                  {c.name
-                    ?.split(" ")
-                    .filter((w: string) => w.length > 0)
-                    .map((w: string) => w[0].toUpperCase())
-                    .join("")
-                    .slice(0, 2)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div
-                    className="text-white text-xs truncate"
-                    style={{ fontWeight: 600 }}
-                  >
-                    {c.name}
-                  </div>
-                  <div className="text-blue-400 text-xs capitalize">
-                    {c.type}
-                  </div>
-                </div>
-                {c.unread_count > 0 && (
-                  <span
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-white"
-                    style={{
-                      background: "#7c3aed",
-                      fontSize: "0.6rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {c.unread_count}
-                  </span>
-                )}
-              </button>
-            ))
-          ) : (
-            <p className="text-xs text-blue-200">No communities yet.</p>
-          )}
-
-          {/* View All Communities */}
-          <button
-            onClick={() => navigate("/community")}
-            className="w-full mt-2 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5"
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              color: "rgba(255,255,255,0.6)",
-            }}
-          >
-            View all communities <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
       </main>
     </div>
   );
