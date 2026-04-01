@@ -16,12 +16,10 @@ import {
 } from "lucide-react";
 
 type Mode = "login" | "signup";
-type Role = "teacher" | "student";
 
 export function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("login");
-  const [role, setRole] = useState<Role>("student");
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -54,8 +52,8 @@ export function AuthPage() {
           throw new Error("This email is already registered. Please log in instead.");
         }
 
-        // Redirect to onboarding with role + name
-        navigate(`/onboarding?role=${role}&name=${encodeURIComponent(name)}`);
+        // Redirect to onboarding with name (path is chosen during onboarding)
+        navigate(`/onboarding?name=${encodeURIComponent(name)}`);
       } else {
         // LOGIN USER
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -72,14 +70,9 @@ export function AuthPage() {
           .eq("id", data.user.id)
           .maybeSingle();
 
-        if (!profile) {
-          navigate(`/onboarding?role=${role}`);
+        if (!profile || !profile.role) {
+          navigate(`/onboarding`);
           return;
-        }
-
-        if (profile.role !== role) {
-          await supabase.auth.signOut();
-          throw new Error(`This email is registered as a ${profile.role}. Please select the ${profile.role} role to sign in.`);
         }
 
         if (profile.role === "teacher") navigate("/teacher");
@@ -238,53 +231,6 @@ export function AuthPage() {
               ? "Sign in to your Access Learn account"
               : "Join thousands of educators and learners worldwide"}
           </p>
-
-          {/* Role selector */}
-          <div className="mb-6">
-            <label className="block text-sm text-gray-600 mb-3" style={{ fontWeight: 600 }}>
-              I am a…
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              {(["teacher", "student"] as Role[]).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r)}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
-                  style={{
-                    borderColor: role === r ? "#7c3aed" : "#e2e8f0",
-                    background: role === r ? "rgba(124,58,237,0.04)" : "white",
-                  }}
-                >
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                    style={{
-                      background:
-                        role === r
-                          ? "linear-gradient(135deg, #1e3a8a, #7c3aed)"
-                          : "#f1f5f9",
-                      color: role === r ? "white" : "#94a3b8",
-                    }}
-                  >
-                    {r === "teacher" ? (
-                      <BookOpen className="w-5 h-5" />
-                    ) : (
-                      <Users className="w-5 h-5" />
-                    )}
-                  </div>
-                  <span
-                    className="text-sm capitalize"
-                    style={{
-                      fontWeight: 600,
-                      color: role === r ? "#7c3aed" : "#64748b",
-                    }}
-                  >
-                    {r}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
