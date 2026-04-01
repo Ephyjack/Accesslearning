@@ -144,20 +144,14 @@ async function executeWithFallback(systemMessage: string, userMessage: string, m
       if (data.choices?.[0]?.message?.content) {
         return data.choices[0].message.content.trim();
       }
-    } else {
-      // Very last resort: try to hit the GET redirect text endpoint directly
-      const buffer = `${systemMessage} Query: ${userMessage}`;
-      const GETres = await fetch(`https://gen.pollinations.ai/${encodeURIComponent(buffer)}`);
-      if (GETres.ok) {
-        const textData = await GETres.text();
-        return textData.trim();
-      }
     }
   } catch (e) {
-    console.error("Tier 4 (Pollinations API) Failed", e);
+    console.error("Tier 4 (Pollinations API) Failed (likely Browser CORS block)", e);
   }
 
-  return "I'm currently unable to access the AI network. Please check your API keys or try again later.";
+  // If ALL 4 TIERS FAIL (including open proxies due to browser CORS configuration):
+  // Explicitly return a helpful message to the student so they can fix it for free.
+  return "Oops! The AI is currently disconnected.\n\nSince you are a student, you can instantly get a 100% FREE API key to permanently fix this:\n1. Go to aistudio.google.com\n2. Click 'Get API Key' (No credit card needed)\n3. Paste it as VITE_GEMINI_API_KEY in your project's .env file.";
 }
 
 export async function generateLiveSummary(transcripts: string[]): Promise<string> {
