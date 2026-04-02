@@ -5,7 +5,7 @@ import {
   Monitor, MessageSquare, Users, FileText, ChevronDown, Send, Upload,
   Hand, Maximize2, Languages, Accessibility, Settings, SkipBack,
   ChevronLeft, ChevronRight, CheckCircle2, Paperclip, Volume2, ShieldCheck,
-  UserCheck, UserX, UserMinus, Plus, Copy
+  UserCheck, UserX, UserMinus, Plus, Copy, Download, BookmarkPlus, PlayCircle
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { AIAssistant } from "./AIAssistant";
@@ -250,7 +250,7 @@ export function ClassroomInterface() {
     const allParticipants = [localParticipant, ...remoteParticipants].filter(Boolean);
 
     // Real-time UI States
-    const [sidebarTab, setSidebarTab] = useState<"chat" | "participants" | "assignments">("chat");
+    const [sidebarTab, setSidebarTab] = useState<"chat" | "participants" | "assignments" | "materials">("chat");
     const [selectedLang, setSelectedLang] = useState(preferredLang);
     const [showLangDropdown, setShowLangDropdown] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -260,6 +260,30 @@ export function ClassroomInterface() {
     const [aiEnabled, setAiEnabled] = useState(true);
     const [aiSummary, setAiSummary] = useState("Waiting for sufficient dialogue to generate summary...");
     const [mobileChatOpen, setMobileChatOpen] = useState(false);
+    const [classResources, setClassResources] = useState<any[]>([]);
+    
+    // Fetch Class Resources
+    useEffect(() => {
+      if (!classData?.id) return;
+      const fetchResources = async () => {
+        const { data } = await supabase.from('class_resources').select('*').eq('class_id', classData.id).order('created_at', { ascending: false });
+        if (data) setClassResources(data);
+      };
+      fetchResources();
+    }, [classData?.id]);
+
+    const handleSaveMaterial = async (resourceId: string) => {
+      if (!profile) return;
+      const { error } = await supabase.from('saved_resources').insert({
+        student_id: profile.id,
+        resource_id: resourceId
+      });
+      if (error && !error.message.includes('duplicate')) {
+        alert("Failed to save material: " + error.message);
+      } else {
+        alert("Material saved to your Dashboard Library!");
+      }
+    };
 
     // Active Speaker & Pinning Logic
     const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null);
@@ -767,7 +791,7 @@ export function ClassroomInterface() {
               </div>
             )}
             <div className="flex shrink-0 w-full" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-              {["chat", "participants"].map((tab) => (
+              {["chat", "participants", "materials"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setSidebarTab(tab as any)}
@@ -779,7 +803,9 @@ export function ClassroomInterface() {
                     textTransform: 'capitalize'
                   }}
                 >
-                  {tab === 'chat' ? <MessageSquare className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                  {tab === 'chat' && <MessageSquare className="w-4 h-4" />}
+                  {tab === 'participants' && <Users className="w-4 h-4" />}
+                  {tab === 'materials' && <FileText className="w-4 h-4" />}
                   {tab}
                 </button>
               ))}
@@ -848,6 +874,45 @@ export function ClassroomInterface() {
                 })}
 
                 {/* Note: The assignment submission section was requested to be removed or left. We removed it for simplicity to focus on participants list as requested. */}
+              </div>
+            )}
+
+            {sidebarTab === "materials" && (
+              <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: "thin" }}>
+                {classResources.length === 0 ? (
+                  <div className="text-center py-10">
+                    <FileText className="w-10 h-10 text-white/10 mx-auto mb-3" />
+                    <p className="text-sm text-gray-400">Your teacher has not uploaded any learning material.</p>
+                  </div>
+                ) : (
+                  classResources.map((res: any) => (
+                    <div key={res.id} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                      {res.file_type === 'video' ? (
+                        <div className="w-full bg-black">
+                          <video src={res.url} controls className="w-full max-h-48 object-contain" />
+                        </div>
+                      ) : (
+                        <div className="bg-gradient-to-r from-violet-500/20 to-blue-500/20 p-4 shrink-0 flex items-center justify-center border-b border-white/5">
+                           <FileText className="w-8 h-8 text-violet-300" />
+                        </div>
+                      )}
+                      
+                      <div className="p-3">
+                        <div className="font-semibold text-sm text-white mb-1 truncate">{res.title}</div>
+                        <div className="flex items-center gap-2 mt-3">
+                          <a href={res.url} target="_blank" download rel="noreferrer" className="flex-1 py-1.5 flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/20 text-xs text-white rounded-lg transition-colors">
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </a>
+                          {!isTeacher && (
+                            <button onClick={() => handleSaveMaterial(res.id)} className="flex-1 py-1.5 flex items-center justify-center gap-1.5 bg-violet-600 hover:bg-violet-500 text-xs text-white rounded-lg transition-colors">
+                              <BookmarkPlus className="w-3.5 h-3.5" /> Save
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>

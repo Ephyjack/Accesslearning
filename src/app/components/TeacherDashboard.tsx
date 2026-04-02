@@ -32,7 +32,8 @@ import {
   Trash2,
   Menu, X, Circle,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import { AIAssistant } from "./AIAssistant";
 import { NotificationBell } from "./NotificationBell";
@@ -58,6 +59,8 @@ export function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState<"classes" | "rooms" | "communities" | "materials" | "requests">("classes");
   const [showAddMaterialModal, setShowAddMaterialModal] = useState(false);
   const [newMaterial, setNewMaterial] = useState({ title: '', url: '', class_id: '' });
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const [isUploadingMaterial, setIsUploadingMaterial] = useState(false);
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
@@ -314,13 +317,44 @@ export function TeacherDashboard() {
   }, [profile]);
 
   const handleCreateMaterial = async () => {
-    if (!newMaterial.title || !newMaterial.url || !newMaterial.class_id) return;
+    if (!newMaterial.title || !newMaterial.class_id) return;
+    if (!newMaterial.url && !materialFile) return;
+
+    setIsUploadingMaterial(true);
+    let finalUrl = newMaterial.url;
+    let fileType = 'link';
+
+    if (materialFile) {
+      const ext = materialFile.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('materials')
+        .upload(fileName, materialFile);
+
+      if (uploadError) {
+        alert("File upload failed: " + uploadError.message);
+        setIsUploadingMaterial(false);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(fileName);
+      finalUrl = publicUrl;
+
+      if (materialFile.type.includes('video')) fileType = 'video';
+      else if (materialFile.type.includes('pdf')) fileType = 'pdf';
+      else fileType = 'file';
+    }
+
     const { data, error } = await supabase.from('class_resources').insert({
       title: newMaterial.title,
-      url: newMaterial.url,
+      url: finalUrl,
       class_id: newMaterial.class_id,
-      created_by: profile.id
+      created_by: profile.id,
+      file_type: fileType
     }).select('*, classes(name)').single();
+
+    setIsUploadingMaterial(false);
 
     if (error) {
       alert("Failed to add material: " + error.message);
@@ -328,6 +362,7 @@ export function TeacherDashboard() {
       setMaterials([data, ...materials]);
       setShowAddMaterialModal(false);
       setNewMaterial({ title: '', url: '', class_id: '' });
+      setMaterialFile(null);
     }
   };
 
@@ -1536,8 +1571,27 @@ export function TeacherDashboard() {
                 <input value={newMaterial.title} onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })} placeholder="e.g. Week 1 Slides" className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }} />
               </div>
               <div className="mb-4">
-                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Link / URL</label>
-                <input value={newMaterial.url} onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })} placeholder="https://..." className="w-full px-4 py-3 rounded-xl border text-sm outline-none" style={{ borderColor: "#e2e8f0" }} />
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Link / URL (Optional if uploading file)</label>
+                <input value={newMaterial.url} onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })} disabled={!!materialFile} placeholder="https://..." className="w-full px-4 py-3 rounded-xl border text-sm outline-none disabled:bg-gray-50" style={{ borderColor: "#e2e8f0" }} />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Upload File (PDF or Video)</label>
+                <div className="relative border-2 border-dashed rounded-xl p-4 text-center hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0" }}>
+                  <input
+                    type="file"
+                    accept=".pdf,.mp4,.webm"
+                    disabled={!!newMaterial.url}
+                    onChange={(e) => setMaterialFile(e.target.files?.[0] || null)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <div className="text-sm text-gray-500 font-medium">
+                    {materialFile ? (
+                      <span className="text-violet-600 font-bold">{materialFile.name} ({(materialFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                    ) : (
+                      <span>Drag a file here or click to browse</span>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="mb-6">
                 <label className="block text-sm mb-1.5" style={{ fontWeight: 600, color: "#374151" }}>Select Class</label>
@@ -1548,7 +1602,15 @@ export function TeacherDashboard() {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setShowAddMaterialModal(false)} className="flex-1 py-3 rounded-xl border text-sm hover:bg-gray-50 transition-colors" style={{ borderColor: "#e2e8f0", color: "#64748b" }}>Cancel</button>
-                <button onClick={handleCreateMaterial} className="flex-1 py-3 rounded-xl text-white text-sm" style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}>Add Link</button>
+                <button
+                  onClick={handleCreateMaterial}
+                  disabled={isUploadingMaterial || (!newMaterial.url && !materialFile) || (!newMaterial.title) || (!newMaterial.class_id)}
+                  className="flex-1 py-3 rounded-xl text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg, #1e3a8a, #7c3aed)" }}
+                >
+                  {isUploadingMaterial ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {isUploadingMaterial ? "Uploading..." : materialFile ? "Upload File" : "Add Link"}
+                </button>
               </div>
             </div>
           </div>

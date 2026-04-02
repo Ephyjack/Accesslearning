@@ -5,7 +5,7 @@ import {
   GraduationCap, BookOpen, Clock, Video, FileText, CheckCircle2,
   Search, Plus, Play, Users, Calendar, Layers, LogOut,
   Settings, Languages, Headphones, Upload, Radio, Circle, Hash,
-  Lock, Menu, X, Star, ArrowRight, Sparkles, RefreshCw
+  Lock, Menu, X, Star, ArrowRight, Sparkles, RefreshCw, Trash2
 } from "lucide-react";
 import { AIAssistant } from "./AIAssistant";
 import { NotificationBell } from "./NotificationBell";
@@ -141,15 +141,21 @@ export function StudentDashboard() {
       }
       setEnrolledClasses(allClasses);
 
-      // Fetch materials for enrolled classes
-      if (allClasses.length > 0) {
-        const classIds = allClasses.map((c: any) => c.id);
-        const { data: mats } = await supabase
-          .from("class_resources")
-          .select("*, classes(name)")
-          .in("class_id", classIds)
-          .order("created_at", { ascending: false });
-        if (mats) setMaterials(mats);
+      // Fetch personal saved materials library
+      const { data: savedMats } = await supabase
+        .from("saved_resources")
+        .select("*, class_resources(*, classes(name))")
+        .eq("student_id", userProfile.id)
+        .order("saved_at", { ascending: false });
+
+      if (savedMats) {
+        // Flatten the data for easier UI rendering
+        const flattened = savedMats.map((sm: any) => ({
+          save_id: sm.id,
+          saved_at: sm.saved_at,
+          ...sm.class_resources
+        })).filter((m: any) => m.id); // ensure linked resource still exists
+        setMaterials(flattened);
       }
 
       // Fetch communities
@@ -238,6 +244,16 @@ export function StudentDashboard() {
 
     setShowCreateModal(false);
     navigate(`/classroom/${code}`);
+  };
+
+  const handleUnsaveMaterial = async (saveId: string) => {
+    if (!confirm("Remove this from your Dashboard Library?")) return;
+    const { error } = await supabase.from('saved_resources').delete().eq('id', saveId);
+    if (!error) {
+      setMaterials(materials.filter(m => m.save_id !== saveId));
+    } else {
+      alert("Error removing item: " + error.message);
+    }
   };
 
   const handleCreateRoom = async () => {
@@ -724,31 +740,47 @@ export function StudentDashboard() {
           </div>
         )}
 
-
-
         {/* Materials Tab */}
         {activeTab === "materials" && materials.length === 0 && (
-          <div className="text-center py-16 px-4 rounded-2xl border-2 border-dashed" style={{ borderColor: "#cbd5e1", background: "transparent" }}>
-            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-gray-900 font-bold mb-1">No Materials Yet</h3>
-            <p className="text-sm text-gray-500">Your teachers haven't uploaded any study materials or links.</p>
+          <div className="bg-white rounded-2xl p-8 shadow-sm flex flex-col items-center justify-center text-center mt-6" style={{ border: "1px solid #f1f5f9", height: "40vh" }}>
+            <div className="w-16 h-16 rounded-full bg-violet-50 flex items-center justify-center mb-4 text-violet-500">
+              <FileText className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">No Saved Materials</h2>
+            <p className="text-gray-500 max-w-sm">When you join a classroom, you can click "Save" on videos and documents to build your personal library here.</p>
           </div>
         )}
 
+        {/* ── Materials List ── */}
         {activeTab === "materials" && materials.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
-            {materials.map((m) => (
-              <div key={m.id} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow" style={{ border: "1px solid #f1f5f9" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-white font-bold" style={{ background: "#1e3a8a" }}>
-                    <FileText className="w-5 h-5" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            {materials.map((m: any) => (
+              <div key={m.save_id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col" style={{ border: "1px solid #f1f5f9" }}>
+                {m.file_type === 'video' ? (
+                  <div className="w-full bg-black shrink-0 relative pt-[56.25%]">
+                    <video src={m.url} controls className="absolute top-0 left-0 w-full h-full object-cover" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">{m.title}</h3>
-                    <p className="text-xs text-gray-500 mb-1">{m.classes?.name || "Resource"}</p>
-                    <a href={m.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">
-                      Open Resource
+                ) : (
+                  <div className="w-full h-32 bg-gradient-to-r from-violet-500/10 to-blue-500/10 flex items-center justify-center shrink-0 border-b border-gray-100">
+                    <FileText className="w-12 h-12 text-violet-300" />
+                  </div>
+                )}
+
+                <div className="p-4 flex-1 flex flex-col">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider" style={{ background: "rgba(124,58,237,0.08)", color: "#7c3aed" }}>
+                      {m.classes?.name || "Resource"}
+                    </span>
+                    <span className="text-xs text-gray-400 ml-auto">{new Date(m.saved_at).toLocaleDateString()}</span>
+                  </div>
+                  <h3 className="font-bold text-gray-900 mb-1 line-clamp-2">{m.title}</h3>
+                  <div className="mt-auto pt-4 flex gap-2">
+                    <a href={m.url} target="_blank" download rel="noreferrer" className="flex-1 py-1.5 flex items-center justify-center gap-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-xs text-gray-700 rounded-lg transition-colors font-medium">
+                      Download
                     </a>
+                    <button onClick={() => handleUnsaveMaterial(m.save_id)} className="px-3 py-1.5 flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-100 border border-red-100 rounded-lg transition-colors" title="Remove from Library">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
