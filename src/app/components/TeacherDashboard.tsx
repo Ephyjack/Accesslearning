@@ -357,39 +357,46 @@ export function TeacherDashboard() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        const userError = !user ? new Error("No session") : null;
+      // Attempt 1: get the session from local cache
+      let { data: { session } } = await supabase.auth.getSession();
 
-        if (userError) throw userError;
+      // If no session is found on the first try (can happen immediately after a
+      // LiveKit room.disconnect() due to a brief auth state flush), wait a beat
+      // and retry once before giving up.
+      if (!session) {
+        await new Promise(res => setTimeout(res, 800));
+        ({ data: { session } } = await supabase.auth.getSession());
+      }
 
-        if (!user) {
-          navigate("/login");
-          return;
-        }
+      const user = session?.user;
+      if (!user) {
+        // Genuine unauthenticated state — redirect silently, no alert needed
+        navigate("/");
+        return;
+      }
 
-        // Fetch profile from 'profiles' table
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
+      // Fetch profile from 'profiles' table
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
 
-        if (error) throw error;
+      if (error || !data) {
+        // Profile missing — only show alert for genuine DB/auth errors
+        console.error("TeacherDashboard: failed to load profile", error?.message);
+        navigate("/");
+        return;
+      }
 
-        setProfile(data);
+      setProfile(data);
 
-        // Redirect if user is not a teacher
-        if (data.role !== "teacher") {
-          navigate("/student");
-          return;
-        }
-
-      } catch (err: any) {
-        console.error(err.message);
-        alert("Error loading profile. Please log in again.");
-        navigate("/login");
+      // Allow access for teachers AND dual-role users (is_also_learner)
+      // who chose to open the teacher dashboard.
+      const isTeacherRole = data.role === "teacher" || data.is_also_learner === true;
+      if (!isTeacherRole) {
+        // Pure student — send them to the correct dashboard silently
+        navigate("/student");
       }
     };
 

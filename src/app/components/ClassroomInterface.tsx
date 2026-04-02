@@ -71,7 +71,12 @@ export function ClassroomInterface() {
     const initializeClassroom = async () => {
       // 1. Fetch Session — use getSession() (reads from local cache) to avoid
       //    "session not found" errors that getUser() (network call) can throw.
-      const { data: { session } } = await supabase.auth.getSession();
+      //    Retry once with a short delay to handle any post-LiveKit-disconnect race.
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        await new Promise(res => setTimeout(res, 600));
+        ({ data: { session } } = await supabase.auth.getSession());
+      }
       const user = session?.user;
       if (!user) { navigate("/"); return; }
 
@@ -382,12 +387,22 @@ export function ClassroomInterface() {
       return () => { supabase.removeChannel(messagesSub); supabase.removeChannel(transcriptSub); supabase.removeChannel(requestSub); };
     }, [classData, isTeacher]);
 
+    // Keep a ref to aiEnabled so the recognition.onend closure sees the latest value
+    const aiEnabledRef = useRef(aiEnabled);
+    useEffect(() => { aiEnabledRef.current = aiEnabled; }, [aiEnabled]);
+
     // Speech Recognition Hook
+    // NOTE: Recognition runs independently of the LiveKit mic mute state (micOn).
+    // micOn only controls whether remote participants can HEAR the user.
+    // Transcription is a LOCAL capture — it should always run when aiEnabled,
+    // so live translation works even when the teacher/student mutes their mic
+    // in the call.
     useEffect(() => {
-      let isMounted = true;
-      if (!micOn || !aiEnabled) {
+      if (!aiEnabled) {
+        // AI features turned off — stop recognition if running
         if (recognitionRef.current) {
           try { recognitionRef.current.stop(); } catch (e) { }
+          recognitionRef.current = null;
         }
         return;
       }
@@ -395,6 +410,7 @@ export function ClassroomInterface() {
       const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRec) return;
 
+      let isMounted = true;
       const recognition = new SpeechRec();
       recognition.continuous = true;
       recognition.interimResults = false;
@@ -403,17 +419,25 @@ export function ClassroomInterface() {
       recognition.onresult = async (event: any) => {
         const last = event.results[event.results.length - 1];
         if (last.isFinal) {
-          const text = last[0].transcript;
+          const text = last[0].transcript.trim();
+          if (!text) return;
           await supabase.from('transcripts').insert({
-            room_id: classData?.id, speaker: profile?.full_name, text: text
+            room_id: classData?.id, speaker: profile?.full_name, text
           });
         }
       };
 
-      // Auto-restart if it stops due to silence
+      // Auto-restart on silence — only if AI is still enabled
       recognition.onend = () => {
-        if (isMounted && micOn && aiEnabled) {
+        if (isMounted && aiEnabledRef.current) {
           try { recognition.start(); } catch (e) { }
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        // 'not-allowed' means mic permission denied — don't loop
+        if (e.error === 'not-allowed') {
+          isMounted = false;
         }
       };
 
@@ -425,8 +449,9 @@ export function ClassroomInterface() {
       return () => {
         isMounted = false;
         try { recognition.stop(); } catch (e) { }
+        recognitionRef.current = null;
       };
-    }, [micOn, aiEnabled, classData?.id, profile?.full_name]);
+    }, [aiEnabled, classData?.id, profile?.full_name]);
 
     // Periodic Auto-Summary
     useEffect(() => {
@@ -453,12 +478,18 @@ export function ClassroomInterface() {
       await supabase.from("room_requests").update({ status: 'denied' }).eq('id', reqId);
     };
 
-    const handleLeave = async () => {
-      if (room) await room.disconnect();
+    const handleLeave = () => {
+      // Stop speech recognition immediately
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch (e) { }
       }
+      // Navigate first so the dashboard's getSession() runs while still authenticated.
+      // LiveKit disconnect happens asynchronously after navigation — the room tears
+      // down in the background without blocking the session on the next page.
       navigate(isTeacher ? "/teacher" : "/student");
+      if (room) {
+        try { room.disconnect(); } catch (e) { }
+      }
     };
 
     const [copiedCode, setCopiedCode] = useState(false);

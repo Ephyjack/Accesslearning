@@ -44,12 +44,22 @@ export function StudentDashboard() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Attempt 1: get session from local cache
+      let { data: { session } } = await supabase.auth.getSession();
+
+      // Retry once after a short delay — LiveKit room.disconnect() can briefly
+      // flush the auth state, causing getSession() to return null on the first try.
+      if (!session) {
+        await new Promise(res => setTimeout(res, 800));
+        ({ data: { session } } = await supabase.auth.getSession());
+      }
+
       const user = session?.user;
       if (!user) {
         navigate("/");
         return;
       }
+
       const { data: userProfile } = await supabase
         .from("profiles")
         .select("*")
