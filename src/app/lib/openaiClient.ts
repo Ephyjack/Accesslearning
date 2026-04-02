@@ -199,28 +199,43 @@ async function executeWithFallback(messages: ChatMessage[], maxTokens = 500): Pr
 function localFallback(messages: ChatMessage[]): string {
   const userMsg = [...messages].reverse().find(m => m.role === "user")?.content?.toLowerCase() ?? "";
 
+  // 1. Platform-specific questions
+  if (userMsg.includes("accesslearn") || userMsg.includes("access learn")) {
+    if (userMsg.includes("community") || userMsg.includes("communities")) {
+      return "To create a community in AccessLearn, navigate to the 'Communities' tab on the left sidebar of your dashboard. From there, you can click 'Create Community' to set up a new group for your class or study group!";
+    }
+    return "AccessLearn is a comprehensive educational platform that bridges the gap between students and educators. We provide live classrooms with real-time translation, AI-assisted summaries, and interactive dashboards to make learning accessible for everyone.";
+  }
+
+  // 2. Greetings
   if (/^(hi|hello|hey|good\s*(morning|afternoon|evening))/.test(userMsg))
     return "Hello! 👋 I'm your AccessLearn AI assistant. I can help with lesson planning, explaining concepts, studying tips, and navigating the platform. What would you like help with?";
 
-  if (/help/.test(userMsg))
-    return "I'm here to help! You can ask me about:\n• Class management tips\n• Explaining a subject or concept\n• Study strategies\n• How to use AccessLearn features\n\nWhat do you need?";
+  // 3. Help / Navigation
+  if (/\b(help|guide|how to|stuck)\b/.test(userMsg))
+    return "I'm here to help! You can ask me about:\n• Creating classrooms or communities\n• Live translation features\n• Study strategies\n\nWhat do you need assistance with?";
 
-  if (/class|classroom|lesson|teach/.test(userMsg))
-    return "Great question about teaching! I'd suggest starting with a clear learning objective, breaking content into short segments, and using the AccessLearn classroom tools like live translation and AI summaries to keep students engaged.";
+  // 4. Teacher / Classroom
+  if (/\b(class|classroom|lesson|teach|educator)\b/.test(userMsg))
+    return "Great question! From your Educator Dashboard, you can create new classrooms, grade student requests, and launch live LiveKit video sessions equipped with AI transcription.";
 
-  if (/student|learn|study/.test(userMsg))
-    return "For effective studying: 📚 Break sessions into 25-minute focused blocks (Pomodoro), review material within 24 hours, and use the chat & transcript features in class to revisit key points.";
+  // 5. Student / Study Tips
+  if (/\b(student|learn|study|exam|test)\b/.test(userMsg))
+    return "For effective studying: 📚 Break sessions into 25-minute focused blocks (Pomodoro), review material within 24 hours, and use the chat & transcript features in your AccessLearn classes to revisit key points.";
 
-  if (/translat/.test(userMsg))
-    return "AccessLearn supports live translation in 10+ languages during classroom sessions. Select your preferred language from the globe icon in the top menu to see all speech translated in real-time!";
+  // 6. Translation feature
+  if (/\b(translat|language|caption)\b/.test(userMsg))
+    return "AccessLearn supports live translation in multiple languages during classroom sessions! Just select your preferred language from the globe icon in the classroom to see live AI translations.";
 
-  if (/thank/.test(userMsg))
+  // 7. Courtesies
+  if (/\b(thank|thanks)\b/.test(userMsg))
     return "You're very welcome! 😊 Let me know if there's anything else I can help with.";
 
-  if (/bye|goodbye/.test(userMsg))
+  if (/\b(bye|goodbye)\b/.test(userMsg))
     return "Goodbye! Feel free to come back anytime. Happy learning! 🎓";
 
-  return "That's a great question! Unfortunately I'm having difficulty reaching my AI backend at the moment. Please check that your internet connection is active and try again in a few seconds. In the meantime, I'm happy to help with basic platform questions — just ask!";
+  // 8. Catch-all
+  return "That's a great question! I'm currently operating in offline mode, so I can only answer basic questions about the AccessLearn platform right now. Try asking me about 'classrooms', 'communities', or 'study tips'!";
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
