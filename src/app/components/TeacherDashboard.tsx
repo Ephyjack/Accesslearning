@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { supabase } from "./supabaseClient";
+import { ProfileSettings } from "./ProfileSettings";
 import {
   GraduationCap,
   BarChart2,
@@ -60,6 +61,7 @@ export function TeacherDashboard() {
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // -----------------------
   // Profile & Data
@@ -682,6 +684,7 @@ export function TeacherDashboard() {
 
           <div className="flex gap-2">
             <button
+              onClick={() => setIsSettingsOpen(true)}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs transition-all hover:bg-white/10"
               style={{ color: "rgba(255,255,255,0.5)" }}
             >
@@ -1720,6 +1723,15 @@ export function TeacherDashboard() {
 
 
       </main>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <ProfileSettings
+          profile={profile}
+          onClose={() => setIsSettingsOpen(false)}
+          onUpdate={(p) => setProfile(p)}
+        />
+      )}
     </div>
   );
 }

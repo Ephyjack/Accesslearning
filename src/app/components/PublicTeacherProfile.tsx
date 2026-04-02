@@ -5,7 +5,7 @@ import {
   GraduationCap, ArrowLeft, MapPin, BookOpen, Star,
   Send, CheckCircle2, Loader2, Globe, Users, Video,
   MessageSquare, Radio, X, Copy, Check, ExternalLink,
-  Award, ShieldCheck, Activity
+  Award, ShieldCheck, Activity, Linkedin, Twitter, Youtube, Briefcase, PlayCircle
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -209,7 +209,7 @@ export function PublicTeacherProfile() {
       setLoading(true);
       const { data: t, error } = await supabase
         .from("profiles")
-        .select("id, full_name, bio, avatar_url, country, school, subjects, teaching_style, rating, review_count, is_public, educator_type, field_category, headline, is_also_learner, learner_level")
+        .select("id, full_name, bio, avatar_url, country, school, subjects, teaching_style, rating, review_count, is_public, educator_type, field_category, headline, is_also_learner, learner_level, social_links, certifications, external_platforms")
         .eq("id", teacherId)
         .eq("role", "teacher")
         .single();
@@ -461,6 +461,28 @@ export function PublicTeacherProfile() {
                     <Stars rating={teacher.rating || 0} />
                     <span className="text-sm text-gray-500">{(teacher.rating || 0).toFixed(1)} · {teacher.review_count || 0} reviews</span>
                   </div>
+
+                  {/* Social Links */}
+                  {teacher.social_links && Object.values(teacher.social_links).some(Boolean) && (
+                    <div className="flex items-center gap-3 mt-4">
+                      {teacher.social_links.linkedin && (
+                        <a href={teacher.social_links.linkedin} target="_blank" rel="noreferrer" className="p-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
+                          <Linkedin className="w-4 h-4" />
+                        </a>
+                      )}
+                      {teacher.social_links.twitter && (
+                        <a href={teacher.social_links.twitter} target="_blank" rel="noreferrer" className="p-2 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors">
+                          <Twitter className="w-4 h-4" />
+                        </a>
+                      )}
+                      {teacher.social_links.website && (
+                        <a href={teacher.social_links.website} target="_blank" rel="noreferrer" className="p-2 rounded-full bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors">
+                          <Globe className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   {requestButton()}
@@ -518,6 +540,59 @@ export function PublicTeacherProfile() {
             </div>
           )}
         </div>
+
+        {/* ── Certifications & Degrees ── */}
+        {teacher.certifications && teacher.certifications.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm p-6 mb-6" style={{ border: "1px solid #f1f5f9" }}>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Award className="w-5 h-5 text-amber-500" /> Degrees & Certifications
+            </h2>
+            <div className="space-y-4">
+              {teacher.certifications.map((c: any, idx: number) => (
+                <div key={idx} className="flex gap-4 items-start">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-amber-50 shrink-0">
+                    <GraduationCap className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900">{c.title}</div>
+                    <div className="text-sm text-gray-500">{c.issuer} {c.year ? `· ${c.year}` : ""}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── External Platforms (Udemy, Coursera, etc) ── */}
+        {teacher.external_platforms && teacher.external_platforms.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm p-6 mb-6" style={{ border: "1px solid #f1f5f9" }}>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-emerald-500" /> External Courses & Content
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {teacher.external_platforms.map((plat: any, idx: number) => {
+                let Icon = PlayCircle;
+                let colorKey = "bg-emerald-50 text-emerald-600";
+
+                if (plat.type === "youtube") { Icon = Youtube; colorKey = "bg-red-50 text-red-600"; }
+                else if (plat.type === "linkedin") { Icon = Linkedin; colorKey = "bg-blue-50 text-blue-600"; }
+
+                return (
+                  <a key={idx} href={plat.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 border border-gray-100 transition-all hover:shadow-sm">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${colorKey}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-gray-900 truncate">{plat.title}</div>
+                      <div className="text-xs text-gray-500 uppercase tracking-wide mt-0.5">{plat.type}</div>
+                    </div>
+                    <ExternalLink className="w-4 h-4 text-gray-300" />
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── Communities ── */}
         {communities.length > 0 && (
