@@ -389,6 +389,14 @@ export function TeacherDashboard() {
         return;
       }
 
+      // Auto-sync Google OAuth avatar if missing from profiles table
+      const googleAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+      if (!data.avatar_url && googleAvatar) {
+        data.avatar_url = googleAvatar;
+        // Fire and forget update to DB so it persists
+        supabase.from("profiles").update({ avatar_url: googleAvatar }).eq("id", user.id).then();
+      }
+
       setProfile(data);
 
       // Allow access for teachers AND dual-role users (is_also_learner)

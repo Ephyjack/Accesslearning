@@ -66,6 +66,13 @@ export function StudentDashboard() {
         .eq("id", user.id)
         .single();
 
+      // Auto-sync Google OAuth avatar if missing from profiles table
+      const googleAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+      if (!userProfile.avatar_url && googleAvatar) {
+        userProfile.avatar_url = googleAvatar;
+        supabase.from("profiles").update({ avatar_url: googleAvatar }).eq("id", user.id).then();
+      }
+
       setProfile(userProfile);
       setLoading(false);
 
